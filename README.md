@@ -11,7 +11,7 @@
 [![Sponsor at Github](https://img.shields.io/badge/Sponsor-GitHub-28a745)](https://github.com/sponsors/tillsteinbach)
 
 
-## CarConnectivity will become the successor of [WeConnect-python](https://github.com/tillsteinbach/WeConnect-python) in 2025 with similar functionality but support for other brands beyond Volkswagen!
+## Due to lack of access to a Cupra car the development of this conenctor is currently stuck. If you want to help me with access to your account, please contact me!
 
 [CarConnectivity](https://github.com/tillsteinbach/CarConnectivity) is a python API to connect to various car services. This connector enables the integration of cupra vehicles through the MyCupra API. Look at [CarConnectivity](https://github.com/tillsteinbach/CarConnectivity) for other supported brands.
 
