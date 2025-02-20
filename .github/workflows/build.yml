@@ -1,0 +1,63 @@
+name: Build Python Package
+
+# Controls when the action will run. 
+on:
+  # Triggers the workflow on push or pull request events but only for the master branch
+  push:
+    branches: [ main ]
+    tags:
+      - "v*"
+    paths:
+     - .github/workflows/build.yml
+     - '**.py'
+     - 'pyproject.toml'
+  pull_request:
+    paths:
+     - .github/workflows/build.yml
+     - '**.py'
+     - 'pyproject.toml'
+
+jobs:
+  build-python:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ['3.9', '3.10', '3.11', '3.12', '3.13']
+
+    steps:
+    - uses: actions/checkout@v4
+    - name: Set up Python ${{ matrix.python-version }}
+      uses: actions/setup-python@v5
+      with:
+        python-version: ${{ matrix.python-version }}
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        if [ -f setup_requirements.txt ]; then pip install -r setup_requirements.txt; fi
+        python -m pip install build
+    - name: Build
+      run: |
+        python -m build
+    - name: Install built package
+      run: |
+        pip install --pre dist/*.whl
+    - name: Run
+      run: |
+        set +e
+        output=$(carconnectivity test/integration_test/carConnectivity.json 2>&1)
+        echo "$output" | grep -q 'There was a problem when authenticating with one or multiple services'
+        if [ $? -ne 0 ]; then
+          echo "$output"
+          exit 1
+        fi
+        set -e
+    - name: Lint
+      run: |
+        make lint
+#    - name: Test
+#      run: |
+#        make test
+
+
+
+

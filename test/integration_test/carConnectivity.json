@@ -1,0 +1,17 @@
+{
+    "carConnectivity": {
+        "log_level": "debug",
+        "connectors": [
+            {
+                "type": "cupra",
+                "disabled": false,
+                "config": {
+                    "log_level": "debug",
+                    "api_log_level": "debug",
+                    "interval": 180
+                }
+            }
+        ],
+        "plugins": []
+    }
+}
