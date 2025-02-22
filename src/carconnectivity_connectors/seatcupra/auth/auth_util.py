@@ -1,7 +1,7 @@
 
 """
 This module provides utility functions and classes for handling authentication and parsing HTML forms
-and scripts for the cupra car connectivity connector.
+and scripts for the seatcupra car connectivity connector.
 """
 from __future__ import annotations
 from typing import TYPE_CHECKING

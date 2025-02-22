@@ -19,14 +19,14 @@ from oauthlib.oauth2 import is_secure_transport
 
 from carconnectivity.errors import AuthenticationError, RetrievalError, TemporaryAuthenticationError
 
-from carconnectivity_connectors.cupra.auth.openid_session import AccessType
-from carconnectivity_connectors.cupra.auth.vw_web_session import VWWebSession
+from carconnectivity_connectors.seatcupra.auth.openid_session import AccessType
+from carconnectivity_connectors.seatcupra.auth.vw_web_session import VWWebSession
 
 if TYPE_CHECKING:
     from typing import Tuple, Dict
 
 
-LOG: logging.Logger = logging.getLogger("carconnectivity.connectors.cupra.auth")
+LOG: logging.Logger = logging.getLogger("carconnectivity.connectors.seatcupra.auth")
 
 
 class MyCupraSession(VWWebSession):
@@ -93,13 +93,13 @@ class MyCupraSession(VWWebSession):
         if self.token is not None and all(key in self.token for key in ('state', 'id_token', 'access_token', 'code')):
             # Generate json body for token request
             body: Dict[str, str] = {
-                    'state': self.token['state'],
-                    'id_token': self.token['id_token'],
-                    'redirect_uri': self.redirect_uri,
-                    'client_id': self.client_id,
-                    'client_secret': 'eb8814e641c81a2640ad62eeccec11c98effc9bccd4269ab7af338b50a94b3a2',
-                    'code': self.token['code'],
-                    'grant_type': 'authorization_code',
+                'state': self.token['state'],
+                'id_token': self.token['id_token'],
+                'redirect_uri': self.redirect_uri,
+                'client_id': self.client_id,
+                'client_secret': 'eb8814e641c81a2640ad62eeccec11c98effc9bccd4269ab7af338b50a94b3a2',
+                'code': self.token['code'],
+                'grant_type': 'authorization_code'
                 }
 
             request_headers: CaseInsensitiveDict = dict(self.headers)  # pyright: ignore reportAssignmentType

@@ -8,13 +8,13 @@ import hashlib
 
 import logging
 
-from carconnectivity_connectors.cupra.auth.my_cupra_session import MyCupraSession
+from carconnectivity_connectors.seatcupra.auth.my_cupra_session import MyCupraSession
 
 if TYPE_CHECKING:
     from typing import Dict, Any
-    from carconnectivity_connectors.cupra.auth.vw_web_session import VWWebSession
+    from carconnectivity_connectors.seatcupra.auth.vw_web_session import VWWebSession
 
-LOG = logging.getLogger("carconnectivity.connectors.cupra.auth")
+LOG = logging.getLogger("carconnectivity.connectors.seatcupra.auth")
 
 
 class SessionUser():

@@ -6,8 +6,8 @@ requires = [
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "carconnectivity-connector-cupra"
-description = "CarConnectivity connector for Cupra services"
+name = "carconnectivity-connector-seatcupra"
+description = "CarConnectivity connector for Seat and Cupra services"
 dynamic = ["version"]
 requires-python = ">=3.9"
 authors = [
@@ -36,7 +36,7 @@ classifiers = [
 [project.urls]
 
 [tool.setuptools_scm]
-write_to = "src/carconnectivity_connectors/cupra/_version.py"
+write_to = "src/carconnectivity_connectors/seatcupra/_version.py"
 
 [tool.pylint.format]
 max-line-length=160

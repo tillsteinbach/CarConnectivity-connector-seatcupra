@@ -18,13 +18,13 @@ from requests.adapters import HTTPAdapter
 
 from carconnectivity.errors import AuthenticationError, RetrievalError
 
-from carconnectivity_connectors.cupra.auth.auth_util import add_bearer_auth_header
-from carconnectivity_connectors.cupra.auth.helpers.blacklist_retry import BlacklistRetry
+from carconnectivity_connectors.seatcupra.auth.auth_util import add_bearer_auth_header
+from carconnectivity_connectors.seatcupra.auth.helpers.blacklist_retry import BlacklistRetry
 
 if TYPE_CHECKING:
     from typing import Dict
 
-LOG = logging.getLogger("carconnectivity.connectors.cupra.auth")
+LOG = logging.getLogger("carconnectivity.connectors.seatcupra.auth")
 
 
 class AccessType(Enum):

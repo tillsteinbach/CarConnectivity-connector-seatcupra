@@ -3,7 +3,7 @@
         "log_level": "debug",
         "connectors": [
             {
-                "type": "cupra",
+                "type": "seatcupra",
                 "disabled": false,
                 "config": {
                     "log_level": "debug",

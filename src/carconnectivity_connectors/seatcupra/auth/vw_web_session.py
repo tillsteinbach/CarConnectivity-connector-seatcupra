@@ -15,8 +15,8 @@ from requests.models import CaseInsensitiveDict
 
 from carconnectivity.errors import APICompatibilityError, AuthenticationError, RetrievalError
 
-from carconnectivity_connectors.cupra.auth.auth_util import CredentialsFormParser, HTMLFormParser, TermsAndConditionsFormParser
-from carconnectivity_connectors.cupra.auth.openid_session import OpenIDSession
+from carconnectivity_connectors.seatcupra.auth.auth_util import CredentialsFormParser, HTMLFormParser, TermsAndConditionsFormParser
+from carconnectivity_connectors.seatcupra.auth.openid_session import OpenIDSession
 
 if TYPE_CHECKING:
     from typing import Any, Dict

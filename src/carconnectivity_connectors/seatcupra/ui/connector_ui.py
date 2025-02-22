@@ -1,4 +1,4 @@
-""" User interface for the cupra connector in the Car Connectivity application. """
+""" User interface for the seatcupra connector in the Car Connectivity application. """
 from __future__ import annotations
 from typing import TYPE_CHECKING
 
@@ -16,16 +16,16 @@ if TYPE_CHECKING:
 
 class ConnectorUI(BaseConnectorUI):
     """
-    A user interface class for the Cupra connector in the Car Connectivity application.
+    A user interface class for the Seat/Cupra connector in the Car Connectivity application.
     """
     def __init__(self, connector: BaseConnector):
-        blueprint: Optional[flask.Blueprint] = flask.Blueprint(name='cupra', import_name='carconnectivity-connector-cupra', url_prefix='/cupra',
+        blueprint: Optional[flask.Blueprint] = flask.Blueprint(name='seatcupra', import_name='carconnectivity-connector-seatcupra', url_prefix='/seatcupra',
                                                                     template_folder=os.path.dirname(__file__) + '/templates')
         super().__init__(connector, blueprint=blueprint)
 
     def get_nav_items(self) -> List[Dict[Literal['text', 'url', 'sublinks', 'divider'], Union[str, List]]]:
         """
-        Generates a list of navigation items for the Cupra connector UI.
+        Generates a list of navigation items for the Seat/Cupra connector UI.
         """
         return super().get_nav_items()
 
@@ -34,6 +34,6 @@ class ConnectorUI(BaseConnectorUI):
         Returns the title of the connector.
 
         Returns:
-            str: The title of the connector, which is "Cupra".
+            str: The title of the connector, which is "Seat/Cupra".
         """
-        return "Cupra"
+        return "Seat/Cupra"
