@@ -365,6 +365,8 @@ class Connector(BaseConnector):
                                         vehicle.climatization.commands.add_command(climatisation_start_stop_command)
                             else:
                                 vehicle.capabilities.clear_capabilities()
+                        if isinstance(vehicle, SeatCupraVehicle):
+                            vehicle = self.fetch_image(vehicle)
                     else:
                         raise APIError('Could not fetch vehicle data, VIN missing')
         for vin in set(garage.list_vehicle_vins()) - seen_vehicle_vins:
@@ -792,6 +794,61 @@ class Connector(BaseConnector):
         data: Dict[str, Any] | None = self._fetch_data(url=url, session=self.session, no_cache=no_cache)
         #{'maxChargeCurrentAc': False, 'defaultMaxTargetSocPercentage': 100}
         print(data)
+        return vehicle
+
+    def fetch_image(self, vehicle: SeatCupraVehicle, no_cache: bool = False) -> SeatCupraVehicle:
+        if SUPPORT_IMAGES:
+            url: str = f'https://ola.prod.code.seat.cloud.vwgroup.com/v1/vehicles/{vehicle.vin.value}/renders'
+            data = self._fetch_data(url, session=self.session, allow_http_error=True)
+            if data is not None:  # pylint: disable=too-many-nested-blocks
+                for image_id, image_url in data.items():
+                    if image_id == 'isDefault':
+                        continue
+                    img = None
+                    cache_date = None
+                    if self.active_config['max_age'] is not None and self.session.cache is not None and image_url in self.session.cache:
+                        img, cache_date_string = self.session.cache[image_url]
+                        img = base64.b64decode(img)  # pyright: ignore[reportPossiblyUnboundVariable]
+                        img = Image.open(io.BytesIO(img))  # pyright: ignore[reportPossiblyUnboundVariable]
+                        cache_date = datetime.fromisoformat(cache_date_string)
+                    if img is None or self.active_config['max_age'] is None \
+                            or (cache_date is not None and cache_date < (datetime.utcnow() - timedelta(seconds=self.active_config['max_age']))):
+                        try:
+                            image_download_response = requests.get(image_url, stream=True)
+                            if image_download_response.status_code == requests.codes['ok']:
+                                img = Image.open(image_download_response.raw)  # pyright: ignore[reportPossiblyUnboundVariable]
+                                if self.session.cache is not None:
+                                    buffered = io.BytesIO()  # pyright: ignore[reportPossiblyUnboundVariable]
+                                    img.save(buffered, format="PNG")
+                                    img_str = base64.b64encode(buffered.getvalue()).decode("utf-8")  # pyright: ignore[reportPossiblyUnboundVariable]
+                                    self.session.cache[image_url] = (img_str, str(datetime.utcnow()))
+                            elif image_download_response.status_code == requests.codes['unauthorized']:
+                                LOG.info('Server asks for new authorization')
+                                self.session.login()
+                                image_download_response = self.session.get(image_url, stream=True)
+                                if image_download_response.status_code == requests.codes['ok']:
+                                    img = Image.open(image_download_response.raw)  # pyright: ignore[reportPossiblyUnboundVariable]
+                                    if self.session.cache is not None:
+                                        buffered = io.BytesIO()  # pyright: ignore[reportPossiblyUnboundVariable]
+                                        img.save(buffered, format="PNG")
+                                        img_str = base64.b64encode(buffered.getvalue()).decode("utf-8")  # pyright: ignore[reportPossiblyUnboundVariable]
+                                        self.session.cache[image_url] = (img_str, str(datetime.utcnow()))
+                        except requests.exceptions.ConnectionError as connection_error:
+                            raise RetrievalError(f'Connection error: {connection_error}') from connection_error
+                        except requests.exceptions.ChunkedEncodingError as chunked_encoding_error:
+                            raise RetrievalError(f'Error: {chunked_encoding_error}') from chunked_encoding_error
+                        except requests.exceptions.ReadTimeout as timeout_error:
+                            raise RetrievalError(f'Timeout during read: {timeout_error}') from timeout_error
+                        except requests.exceptions.RetryError as retry_error:
+                            raise RetrievalError(f'Retrying failed: {retry_error}') from retry_error
+                    if img is not None:
+                        vehicle._car_images[image_id] = img  # pylint: disable=protected-access
+                        if image_id == 'side':
+                            if 'car_picture' in vehicle.images.images:
+                                vehicle.images.images['car_picture']._set_value(img)  # pylint: disable=protected-access
+                            else:
+                                vehicle.images.images['car_picture'] = ImageAttribute(name="car_picture", parent=vehicle.images,
+                                                                                      value=img, tags={'carconnectivity'})
         return vehicle
 
     def _record_elapsed(self, elapsed: timedelta) -> None:
