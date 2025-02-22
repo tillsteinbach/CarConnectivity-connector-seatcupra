@@ -16,11 +16,11 @@ from carconnectivity.errors import AuthenticationError, TooManyRequestsError, Re
     TemporaryAuthenticationError, SetterError, CommandError
 from carconnectivity.util import robust_time_parse, log_extra_keys, config_remove_credentials
 from carconnectivity.units import Length, Power, Speed
-from carconnectivity.vehicle import GenericVehicle, ElectricVehicle, CombustionVehicle, HybridVehicle
 from carconnectivity.doors import Doors
 from carconnectivity.windows import Windows
 from carconnectivity.lights import Lights
 from carconnectivity.drive import GenericDrive, ElectricDrive, CombustionDrive
+from carconnectivity.vehicle import GenericVehicle, ElectricVehicle
 from carconnectivity.attributes import BooleanAttribute, DurationAttribute, GenericAttribute, TemperatureAttribute
 from carconnectivity.units import Temperature
 from carconnectivity.command_impl import ClimatizationStartStopCommand, WakeSleepCommand, HonkAndFlashCommand, LockUnlockCommand, ChargingStartStopCommand
@@ -33,6 +33,8 @@ from carconnectivity_connectors.base.connector import BaseConnector
 from carconnectivity_connectors.seatcupra.auth.session_manager import SessionManager, SessionUser, Service
 from carconnectivity_connectors.seatcupra.auth.my_cupra_session import MyCupraSession
 from carconnectivity_connectors.seatcupra._version import __version__
+from carconnectivity_connectors.seatcupra.capability import Capability
+from carconnectivity_connectors.seatcupra.vehicle import SeatCupraVehicle, SeatCupraElectricVehicle, SeatCupraCombustionVehicle, SeatCupraHybridVehicle
 from carconnectivity_connectors.seatcupra.charging import SeatCupraCharging, mapping_seatcupra_charging_state
 
 SUPPORT_IMAGES = False
@@ -129,7 +131,7 @@ class Connector(BaseConnector):
 
         self._manager: SessionManager = SessionManager(tokenstore=car_connectivity.get_tokenstore(), cache=car_connectivity.get_cache())
         session: requests.Session = self._manager.get_session(Service.MY_CUPRA, SessionUser(username=self.active_config['username'],
-                                                                                              password=self.active_config['password']))
+                                                                                            password=self.active_config['password']))
         if not isinstance(session, MyCupraSession):
             raise AuthenticationError('Could not create session')
         self.session: MyCupraSession = session
@@ -238,11 +240,16 @@ class Connector(BaseConnector):
         garage: Garage = self.car_connectivity.garage
         for vin in set(garage.list_vehicle_vins()):
             vehicle_to_update: Optional[GenericVehicle] = garage.get_vehicle(vin)
-            if vehicle_to_update is not None and vehicle_to_update.is_managed_by_connector(self):
+            if vehicle_to_update is not None and vehicle_to_update.is_managed_by_connector(self) and isinstance(vehicle_to_update, SeatCupraVehicle):
                 vehicle_to_update = self.fetch_vehicle_status(vehicle_to_update)
                 vehicle_to_update = self.fetch_vehicle_mycar_status(vehicle_to_update)
-                # TODO check for parking capability
-                vehicle_to_update = self.fetch_parking_position(vehicle_to_update)
+                vehicle_to_update = self.fetch_mileage(vehicle_to_update)
+                if vehicle_to_update.capabilities.has_capability('climatisation'):
+                    vehicle_to_update = self.fetch_climatisation(vehicle_to_update)
+                if vehicle_to_update.capabilities.has_capability('charging'):
+                    vehicle_to_update = self.fetch_charging(vehicle_to_update)
+                if vehicle_to_update.capabilities.has_capability('parkingPosition'):
+                    vehicle_to_update = self.fetch_parking_position(vehicle_to_update)
 
     def fetch_vehicles(self) -> None:
         """
@@ -262,11 +269,12 @@ class Connector(BaseConnector):
             if 'vehicles' in data and data['vehicles'] is not None:
                 for vehicle_dict in data['vehicles']:
                     if 'vin' in vehicle_dict and vehicle_dict['vin'] is not None:
-                        seen_vehicle_vins.add(vehicle_dict['vin'])
-                        vehicle: Optional[GenericVehicle] = garage.get_vehicle(vehicle_dict['vin'])  # pyright: ignore[reportAssignmentType]
+                        vin: str = vehicle_dict['vin']
+                        seen_vehicle_vins.add(vin)
+                        vehicle: Optional[GenericVehicle] = garage.get_vehicle(vin)  # pyright: ignore[reportAssignmentType]
                         if vehicle is None:
-                            vehicle = GenericVehicle(vin=vehicle_dict['vin'], garage=garage, managing_connector=self)
-                            garage.add_vehicle(vehicle_dict['vin'], vehicle)
+                            vehicle = SeatCupraVehicle(vin=vin, garage=garage, managing_connector=self)
+                            garage.add_vehicle(vin, vehicle)
 
                         if 'vehicleNickname' in vehicle_dict and vehicle_dict['vehicleNickname'] is not None:
                             vehicle.name._set_value(vehicle_dict['vehicleNickname'])  # pylint: disable=protected-access
@@ -299,11 +307,64 @@ class Connector(BaseConnector):
                                     vehicle.model_year._set_value(None)  # pylint: disable=protected-access
                                 log_extra_keys(LOG_API, 'factoryModel', factory_model,  {'vehicleBrand', 'vehicleModel', 'modYear'})
                             log_extra_keys(LOG_API, 'specifications', vehicle_dict['specifications'],  {'steeringRight', 'factoryModel'})
-                            
 
-                        #TODO:  https://ola.prod.code.seat.cloud.vwgroup.com/vehicles/{{VIN}}/connection
-
-                        #TODO: https://ola.prod.code.seat.cloud.vwgroup.com/v2/vehicles/{{VIN}}/capabilities
+                        if isinstance(vehicle, SeatCupraVehicle):
+                            url = f'https://ola.prod.code.seat.cloud.vwgroup.com/v2/vehicles/{vin}/capabilities'
+                            capabilities_data: Dict[str, Any] | None = self._fetch_data(url, session=self.session)
+                            if capabilities_data is not None and 'capabilities' in capabilities_data and capabilities_data['capabilities'] is not None:
+                                found_capabilities = set()
+                                for capability_dict in capabilities_data['capabilities']:
+                                    if 'id' in capability_dict and capability_dict['id'] is not None:
+                                        capability_id = capability_dict['id']
+                                        found_capabilities.add(capability_id)
+                                        if vehicle.capabilities.has_capability(capability_id):
+                                            capability: Capability = vehicle.capabilities.get_capability(capability_id)  # pyright: ignore[reportAssignmentType]
+                                        else:
+                                            capability = Capability(capability_id=capability_id, capabilities=vehicle.capabilities)
+                                            vehicle.capabilities.add_capability(capability_id, capability)
+                                        if 'expirationDate' in capability_dict and capability_dict['expirationDate'] is not None \
+                                                and capability_dict['expirationDate'] != '':
+                                            expiration_date: datetime = robust_time_parse(capability_dict['expirationDate'])
+                                            capability.expiration_date._set_value(expiration_date)  # pylint: disable=protected-access
+                                        else:
+                                            capability.expiration_date._set_value(None)  # pylint: disable=protected-access
+                                        if 'editable' in capability_dict and capability_dict['editable'] is not None:
+                                            # pylint: disable-next=protected-access
+                                            capability.editable._set_value(capability_dict['editable'])
+                                        else:
+                                            capability.editable._set_value(None)  # pylint: disable=protected-access
+                                        if 'parameters' in capability_dict and capability_dict['parameters'] is not None:
+                                            for parameter, value in capability_dict['parameters'].items():
+                                                capability.parameters[parameter] = value
+                                    else:
+                                        raise APIError('Could not fetch capabilities, capability ID missing')
+                                    log_extra_keys(LOG_API, 'capability', capability_dict,  {'id', 'expirationDate', 'editable', 'parameters'})
+                                    
+                                for capability_id in vehicle.capabilities.capabilities.keys() - found_capabilities:
+                                    vehicle.capabilities.remove_capability(capability_id)
+                                
+                                if vehicle.capabilities.has_capability('charging'):
+                                    if not isinstance(vehicle, SeatCupraElectricVehicle):
+                                        LOG.debug('Promoting %s to SeatCupraElectricVehicle object for %s', vehicle.__class__.__name__, vin)
+                                        vehicle = SeatCupraElectricVehicle(origin=vehicle)
+                                        self.car_connectivity.garage.replace_vehicle(vin, vehicle)
+                                    if not vehicle.charging.commands.contains_command('start-stop'):
+                                        charging_start_stop_command: ChargingStartStopCommand = ChargingStartStopCommand(parent=vehicle.charging.commands)
+                                        charging_start_stop_command._add_on_set_hook(self.__on_charging_start_stop)  # pylint: disable=protected-access
+                                        charging_start_stop_command.enabled = True
+                                        vehicle.charging.commands.add_command(charging_start_stop_command)
+                                
+                                if vehicle.capabilities.has_capability('climatisation'):
+                                    if vehicle.climatization is not None and vehicle.climatization.commands is not None \
+                                            and not vehicle.climatization.commands.contains_command('start-stop'):
+                                        climatisation_start_stop_command: ClimatizationStartStopCommand = \
+                                            ClimatizationStartStopCommand(parent=vehicle.climatization.commands)
+                                        # pylint: disable-next=protected-access
+                                        climatisation_start_stop_command._add_on_set_hook(self.__on_air_conditioning_start_stop)
+                                        climatisation_start_stop_command.enabled = True
+                                        vehicle.climatization.commands.add_command(climatisation_start_stop_command)
+                            else:
+                                vehicle.capabilities.clear_capabilities()
                     else:
                         raise APIError('Could not fetch vehicle data, VIN missing')
         for vin in set(garage.list_vehicle_vins()) - seen_vehicle_vins:
@@ -312,7 +373,7 @@ class Connector(BaseConnector):
                 garage.remove_vehicle(vin)
         self.update_vehicles()
 
-    def fetch_vehicle_status(self, vehicle: GenericVehicle, no_cache: bool = False) -> GenericVehicle:
+    def fetch_vehicle_status(self, vehicle: SeatCupraVehicle, no_cache: bool = False) -> SeatCupraVehicle:
         """
         Fetches the status of a vehicle from seat/cupra API.
 
@@ -325,6 +386,25 @@ class Connector(BaseConnector):
         vin = vehicle.vin.value
         if vin is None:
             raise APIError('VIN is missing')
+        
+        url = f'https://ola.prod.code.seat.cloud.vwgroup.com/vehicles/{vin}/connection'
+        vehicle_connection_data: Dict[str, Any] | None = self._fetch_data(url=url, session=self.session, no_cache=no_cache)
+        if vehicle_connection_data is not None:
+            if 'connection' in vehicle_connection_data and vehicle_connection_data['connection'] is not None \
+                    and 'mode' in vehicle_connection_data['connection'] and vehicle_connection_data['connection']['mode'] is not None:
+                if vehicle_connection_data['connection']['mode'] in [item.value for item in GenericVehicle.ConnectionState]:
+                    connection_state: GenericVehicle.ConnectionState = GenericVehicle.ConnectionState(vehicle_connection_data['connection']['mode'])
+                    vehicle.connection_state._set_value(connection_state)  # pylint: disable=protected-access
+                else:
+                    vehicle.connection_state._set_value(GenericVehicle.ConnectionState.UNKNOWN)  # pylint: disable=protected-access
+                    LOG_API.info('Unknown connection state %s', vehicle_connection_data['connection']['mode'])
+                log_extra_keys(LOG_API, f'/api/v2/vehicles/{vin}/connection', vehicle_connection_data, {'connection'})
+                log_extra_keys(LOG_API, f'/api/v2/vehicles/{vin}/connection', vehicle_connection_data['connection'], {'mode'})
+            else:
+                vehicle.connection_state._set_value(None)  # pylint: disable=protected-access
+        else:
+            vehicle.connection_state._set_value(None)  # pylint: disable=protected-access
+
         url = f'https://ola.prod.code.seat.cloud.vwgroup.com/v2/vehicles/{vin}/status'
         vehicle_status_data: Dict[str, Any] | None = self._fetch_data(url=url, session=self.session, no_cache=no_cache)
         if vehicle_status_data:
@@ -401,7 +481,7 @@ class Connector(BaseConnector):
                     else:
                         window = Windows.Window(window_id=window_id, windows=vehicle.windows)
                         vehicle.windows.windows[window_id] = window
-                    if window_status in Windows.OpenState:
+                    if window_status in [item.value for item in Windows.OpenState]:
                         open_state: Windows.OpenState = Windows.OpenState(window_status)
                         if open_state == Windows.OpenState.OPEN:
                             all_windows_closed = False
@@ -420,8 +500,8 @@ class Connector(BaseConnector):
             log_extra_keys(LOG_API, f'/api/v2/vehicle-status/{vin}', vehicle_status_data, {'updatedAt', 'locked', 'lights', 'hood', 'trunk', 'doors',
                                                                                            'windows'})
         return vehicle
-    
-    def fetch_vehicle_mycar_status(self, vehicle: GenericVehicle, no_cache: bool = False) -> GenericVehicle:
+
+    def fetch_vehicle_mycar_status(self, vehicle: SeatCupraVehicle, no_cache: bool = False) -> SeatCupraVehicle:
         """
         Fetches the status of a vehicle from seat/cupra API.
 
@@ -434,6 +514,11 @@ class Connector(BaseConnector):
         vin = vehicle.vin.value
         if vin is None:
             raise APIError('VIN is missing')
+        url = f'https://ola.prod.code.seat.cloud.vwgroup.com/v1/vehicles/{vin}/measurements/engines'
+        vehicle_status_data: Dict[str, Any] | None = self._fetch_data(url=url, session=self.session, no_cache=no_cache)
+        #measurements
+        #{'primary': {'fuelType': 'gasoline', 'rangeInKm': 120.0}, 'secondary': {'fuelType': 'electric', 'rangeInKm': 40.0}}
+        print(vehicle_status_data)
         url = f'https://ola.prod.code.seat.cloud.vwgroup.com/v5/users/{self.session.user_id}/vehicles/{vin}/mycar'
         vehicle_status_data: Dict[str, Any] | None = self._fetch_data(url=url, session=self.session, no_cache=no_cache)
         if vehicle_status_data:
@@ -490,17 +575,17 @@ class Connector(BaseConnector):
                         has_electric = True
                     elif isinstance(drive, CombustionDrive):
                         has_combustion = True
-                if has_electric and not has_combustion and not isinstance(vehicle, ElectricVehicle):
-                    LOG.debug('Promoting %s to ElectricVehicle object for %s', vehicle.__class__.__name__, vin)
-                    vehicle = ElectricVehicle(origin=vehicle)
+                if has_electric and not has_combustion and not isinstance(vehicle, SeatCupraElectricVehicle):
+                    LOG.debug('Promoting %s to SeatCupraElectricVehicle object for %s', vehicle.__class__.__name__, vin)
+                    vehicle = SeatCupraElectricVehicle(origin=vehicle)
                     self.car_connectivity.garage.replace_vehicle(vin, vehicle)
-                elif has_combustion and not has_electric and not isinstance(vehicle, CombustionVehicle):
-                    LOG.debug('Promoting %s to CombustionVehicle object for %s', vehicle.__class__.__name__, vin)
-                    vehicle = CombustionVehicle(origin=vehicle)
+                elif has_combustion and not has_electric and not isinstance(vehicle, SeatCupraCombustionVehicle):
+                    LOG.debug('Promoting %s to SeatCupraCombustionVehicle object for %s', vehicle.__class__.__name__, vin)
+                    vehicle = SeatCupraCombustionVehicle(origin=vehicle)
                     self.car_connectivity.garage.replace_vehicle(vin, vehicle)
-                elif has_combustion and has_electric and not isinstance(vehicle, HybridVehicle):
-                    LOG.debug('Promoting %s to HybridVehicle object for %s', vehicle.__class__.__name__, vin)
-                    vehicle = HybridVehicle(origin=vehicle)
+                elif has_combustion and has_electric and not isinstance(vehicle, SeatCupraHybridVehicle):
+                    LOG.debug('Promoting %s to SeatCupraHybridVehicle object for %s', vehicle.__class__.__name__, vin)
+                    vehicle = SeatCupraHybridVehicle(origin=vehicle)
                     self.car_connectivity.garage.replace_vehicle(vin, vehicle)
             if 'services' in vehicle_status_data and vehicle_status_data['services'] is not None:
                 if 'charging' in vehicle_status_data['services'] and vehicle_status_data['services']['charging'] is not None:
@@ -526,7 +611,7 @@ class Connector(BaseConnector):
                         if isinstance(vehicle, ElectricVehicle):
                             vehicle.charging.settings.target_level._set_value(charging_status['targetPct'])  # pylint: disable=protected-access
                     if 'chargeMode' in charging_status and charging_status['chargeMode'] is not None:
-                        if charging_status['chargeMode'] in Charging.ChargingType:
+                        if charging_status['chargeMode'] in [item.value for item in Charging.ChargingType]:
                             if isinstance(vehicle, ElectricVehicle):
                                 vehicle.charging.type._set_value(value=Charging.ChargingType(charging_status['chargeMode']))  # pylint: disable=protected-access
                         else:
@@ -552,7 +637,7 @@ class Connector(BaseConnector):
                 if 'climatisation' in vehicle_status_data['services'] and vehicle_status_data['services']['climatisation'] is not None:
                     climatisation_status: Dict = vehicle_status_data['services']['climatisation']
                     if 'status' in climatisation_status and climatisation_status['status'] is not None:
-                        if climatisation_status['status'].lower() in Climatization.ClimatizationState:
+                        if climatisation_status['status'].lower() in [item.value for item in Climatization.ClimatizationState]:
                             climatization_state: Climatization.ClimatizationState = Climatization.ClimatizationState(climatisation_status['status'].lower())
                         else:
                             LOG_API.info('Unknown climatization state %s not in %s', climatisation_status['status'],
@@ -575,14 +660,14 @@ class Connector(BaseConnector):
                         remaining_duration: timedelta = timedelta(minutes=climatisation_status['remainingTime'])
                         estimated_date_reached: datetime = datetime.now(tz=timezone.utc) + remaining_duration
                         estimated_date_reached = estimated_date_reached.replace(second=0, microsecond=0)
-                        vehicle.charging.estimated_date_reached._set_value(value=estimated_date_reached)  # pylint: disable=protected-access
+                        vehicle.climatization.estimated_date_reached._set_value(value=estimated_date_reached)  # pylint: disable=protected-access
                     else:
-                        vehicle.charging.estimated_date_reached._set_value(None)  # pylint: disable=protected-access
+                        vehicle.climatization.estimated_date_reached._set_value(None)  # pylint: disable=protected-access
                     log_extra_keys(LOG_API, 'climatisation', climatisation_status, {'status', 'targetTemperatureCelsius', 'targetTemperatureFahrenheit',
                                                                                     'remainingTime'})
         return vehicle
 
-    def fetch_parking_position(self, vehicle: GenericVehicle, no_cache: bool = False) -> GenericVehicle:
+    def fetch_parking_position(self, vehicle: SeatCupraVehicle, no_cache: bool = False) -> SeatCupraVehicle:
         """
         Fetches the position of the given vehicle and updates its position attributes.
 
@@ -600,7 +685,7 @@ class Connector(BaseConnector):
         if vin is None:
             raise APIError('VIN is missing')
         if vehicle.position is None:
-            raise ValueError('Vehicle has no charging object')
+            raise ValueError('Vehicle has no position object')
         url = f'https://ola.prod.code.seat.cloud.vwgroup.com/v1/vehicles/{vin}/parkingposition'
         data: Dict[str, Any] | None = self._fetch_data(url=url, session=self.session, no_cache=no_cache)
         if data is not None:
@@ -620,6 +705,93 @@ class Connector(BaseConnector):
             vehicle.position.latitude._set_value(None)  # pylint: disable=protected-access
             vehicle.position.longitude._set_value(None)  # pylint: disable=protected-access
             vehicle.position.position_type._set_value(None)  # pylint: disable=protected-access
+        return vehicle
+
+    def fetch_mileage(self, vehicle: SeatCupraVehicle, no_cache: bool = False) -> SeatCupraVehicle:
+        """
+        Fetches the mileage of the given vehicle and updates its mileage attributes.
+
+        Args:
+            vehicle (SkodaVehicle): The vehicle object containing the VIN and mileage attributes.
+
+        Returns:
+            SkodaVehicle: The updated vehicle object with the fetched mileage data.
+
+        Raises:
+            APIError: If the VIN is missing.
+            ValueError: If the vehicle has no position object.
+        """
+        vin = vehicle.vin.value
+        if vin is None:
+            raise APIError('VIN is missing')
+        url = f'https://ola.prod.code.seat.cloud.vwgroup.com/v1/vehicles/{vin}/mileage'
+        data: Dict[str, Any] | None = self._fetch_data(url=url, session=self.session, no_cache=no_cache)
+        if data is not None:
+            if 'mileageKm' in data and data['mileageKm'] is not None:
+                vehicle.odometer._set_value(data['mileageKm'], unit=Length.KM)  # pylint: disable=protected-access
+            else:
+                vehicle.odometer._set_value(None)  # pylint: disable=protected-access
+            log_extra_keys(LOG_API, f'https://ola.prod.code.seat.cloud.vwgroup.com/v1/vehicles/{vin}/mileage', data,  {'mileageKm'})
+        else:
+            vehicle.odometer._set_value(None)  # pylint: disable=protected-access
+        return vehicle
+
+    def fetch_climatisation(self, vehicle: SeatCupraVehicle, no_cache: bool = False) -> SeatCupraVehicle:
+        """
+        Fetches the mileage of the given vehicle and updates its mileage attributes.
+
+        Args:
+            vehicle (SkodaVehicle): The vehicle object containing the VIN and mileage attributes.
+
+        Returns:
+            SkodaVehicle: The updated vehicle object with the fetched mileage data.
+
+        Raises:
+            APIError: If the VIN is missing.
+            ValueError: If the vehicle has no position object.
+        """
+        vin = vehicle.vin.value
+        if vin is None:
+            raise APIError('VIN is missing')
+        url = f'https://ola.prod.code.seat.cloud.vwgroup.com/v1/vehicles/{vin}/climatisation/status'
+        data: Dict[str, Any] | None = self._fetch_data(url=url, session=self.session, no_cache=no_cache)
+        #{'climatisationStatus': {'carCapturedTimestamp': '2025-02-18T17:24:02Z', 'climatisationState': 'off', 'climatisationTrigger': 'unsupported'}, 'windowHeatingStatus': {'carCapturedTimestamp': '2025-02-18T16:57:51Z', 'windowHeatingStatus': [{'windowLocation': 'front', 'windowHeatingState': 'off'}, {'windowLocation': 'rear', 'windowHeatingState': 'off'}]}}
+        print(data)
+        url = f'https://ola.prod.code.seat.cloud.vwgroup.com/v2/vehicles/{vin}/climatisation/settings'
+        data: Dict[str, Any] | None = self._fetch_data(url=url, session=self.session, no_cache=no_cache)
+        #{'carCapturedTimestamp': '2025-02-18T17:23:47Z', 'climatisationWithoutExternalPower': True, 'targetTemperatureInCelsius': 22.0, 'targetTemperatureInFahrenheit': 72.0}
+        print(data)
+        return vehicle
+
+    def fetch_charging(self, vehicle: SeatCupraVehicle, no_cache: bool = False) -> SeatCupraVehicle:
+        """
+        Fetches the mileage of the given vehicle and updates its mileage attributes.
+
+        Args:
+            vehicle (SkodaVehicle): The vehicle object containing the VIN and mileage attributes.
+
+        Returns:
+            SkodaVehicle: The updated vehicle object with the fetched mileage data.
+
+        Raises:
+            APIError: If the VIN is missing.
+            ValueError: If the vehicle has no position object.
+        """
+        vin = vehicle.vin.value
+        if vin is None:
+            raise APIError('VIN is missing')
+        url = f'https://ola.prod.code.seat.cloud.vwgroup.com/v1/vehicles/{vin}/charging/status'
+        data: Dict[str, Any] | None = self._fetch_data(url=url, session=self.session, no_cache=no_cache)
+        #{'state': 'off', 'battery': {'currentSocPercentage': 86, 'estimatedRangeInKm': 40}, 'charging': {'state': 'notReadyForCharging', 'type': 'off', 'mode': 'invalid'}, 'plug': {'connection': 'disconnected', 'externalPower': 'unavailable', 'lock': 'unlocked'}}
+        print(data)
+        url = f'https://ola.prod.code.seat.cloud.vwgroup.com/v1/vehicles/{vin}/charging/info'
+        data: Dict[str, Any] | None = self._fetch_data(url=url, session=self.session, no_cache=no_cache)
+        #{'settings': {'maxChargeCurrentAc': 'reduced', 'targetSoc': 100}, 'chargingCareSettings': {}, 'chargingCareStatus': {'batteryCareTargetSoc': 80}}
+        print(data)
+        url = f'https://ola.prod.code.seat.cloud.vwgroup.com/v1/vehicles/{vin}/charging/settings'
+        data: Dict[str, Any] | None = self._fetch_data(url=url, session=self.session, no_cache=no_cache)
+        #{'maxChargeCurrentAc': False, 'defaultMaxTargetSocPercentage': 100}
+        print(data)
         return vehicle
 
     def _record_elapsed(self, elapsed: timedelta) -> None:
@@ -678,6 +850,62 @@ class Connector(BaseConnector):
                 else:
                     raise RetrievalError(f'JSON decode error: {json_error}') from json_error
         return data
+
+    def __on_charging_start_stop(self, start_stop_command: ChargingStartStopCommand, command_arguments: Union[str, Dict[str, Any]]) \
+            -> Union[str, Dict[str, Any]]:
+        if start_stop_command.parent is None or start_stop_command.parent.parent is None \
+                or start_stop_command.parent.parent.parent is None or not isinstance(start_stop_command.parent.parent.parent, SeatCupraVehicle):
+            raise CommandError('Object hierarchy is not as expected')
+        if not isinstance(command_arguments, dict):
+            raise CommandError('Command arguments are not a dictionary')
+        vehicle: SeatCupraVehicle = start_stop_command.parent.parent.parent
+        vin: Optional[str] = vehicle.vin.value
+        if vin is None:
+            raise CommandError('VIN in object hierarchy missing')
+        if 'command' not in command_arguments:
+            raise CommandError('Command argument missing')
+        if command_arguments['command'] == ChargingStartStopCommand.Command.START:
+            url = f'https://ola.prod.code.seat.cloud.vwgroup.com/vehicles/{vin}/charging/requests/start'
+            command_response: requests.Response = self.session.post(url, data='{}', allow_redirects=True)
+        elif command_arguments['command'] == ChargingStartStopCommand.Command.STOP:
+            url = f'https://ola.prod.code.seat.cloud.vwgroup.com/vehicles/{vin}/charging/requests/stop'
+            command_response: requests.Response = self.session.post(url, data='{}', allow_redirects=True)
+        else:
+            raise CommandError(f'Unknown command {command_arguments["command"]}')
+
+        if command_response.status_code not in [requests.codes['ok'], requests.codes['created']]:
+            LOG.error('Could not start/stop charging (%s: %s)', command_response.status_code, command_response.text)
+            raise CommandError(f'Could not start/stop charging ({command_response.status_code}: {command_response.text})')
+        return command_arguments
+
+    def __on_air_conditioning_start_stop(self, start_stop_command: ClimatizationStartStopCommand, command_arguments: Union[str, Dict[str, Any]]) \
+            -> Union[str, Dict[str, Any]]:
+        if start_stop_command.parent is None or start_stop_command.parent.parent is None \
+                or start_stop_command.parent.parent.parent is None or not isinstance(start_stop_command.parent.parent.parent, SeatCupraVehicle):
+            raise CommandError('Object hierarchy is not as expected')
+        if not isinstance(command_arguments, dict):
+            raise CommandError('Command arguments are not a dictionary')
+        vehicle: SeatCupraVehicle = start_stop_command.parent.parent.parent
+        vin: Optional[str] = vehicle.vin.value
+        if vin is None:
+            raise CommandError('VIN in object hierarchy missing')
+        if 'command' not in command_arguments:
+            raise CommandError('Command argument missing')
+        command_dict = {}
+        command_str: Optional[str] = None
+        if command_arguments['command'] == ClimatizationStartStopCommand.Command.START:
+            command_str = 'start'
+        elif command_arguments['command'] == ClimatizationStartStopCommand.Command.STOP:
+            command_str = 'stop'
+        else:
+            raise CommandError(f'Unknown command {command_arguments["command"]}')
+
+        url: str = f'https://ola.prod.code.seat.cloud.vwgroup.com/vehicles/{vin}/climatisation/requests/{command_str}'
+        command_response: requests.Response = self.session.post(url, data=json.dumps(command_dict), allow_redirects=True)
+        if command_response.status_code not in [requests.codes['ok'], requests.codes['created']]:
+            LOG.error('Could not start/stop air conditioning (%s: %s)', command_response.status_code, command_response.text)
+            raise CommandError(f'Could not start/stop air conditioning ({command_response.status_code}: {command_response.text})')
+        return command_arguments
 
     def get_version(self) -> str:
         return __version__
