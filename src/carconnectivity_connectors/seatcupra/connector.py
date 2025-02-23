@@ -1078,15 +1078,35 @@ class Connector(BaseConnector):
         if 'command' not in command_arguments:
             raise CommandError('Command argument missing')
         command_dict = {}
-        command_str: Optional[str] = None
         if command_arguments['command'] == ClimatizationStartStopCommand.Command.START:
-            command_str = 'start'
+            url = f'https://ola.prod.code.seat.cloud.vwgroup.com/v2/vehicles/{vin}/climatisation/start'
+            if vehicle.climatization.settings is None:
+                raise CommandError('Could not control climatisation, there are no climatisation settings for the vehicle available.')
+            if 'target_temperature' in command_arguments:
+                # Round target temperature to nearest 0.5
+                command_dict['targetTemperature'] = round(command_arguments['target_temperature'] * 2) / 2
+            elif vehicle.climatization.settings.target_temperature is not None and vehicle.climatization.settings.target_temperature.enabled \
+                    and vehicle.climatization.settings.target_temperature.value is not None:
+                temperature_value = vehicle.climatization.settings.target_temperature.value
+                if vehicle.climatization.settings.target_temperature.unit == Temperature.C:
+                    command_dict['targetTemperatureUnit'] = 'celsius'
+                elif vehicle.climatization.settings.target_temperature.unit == Temperature.F:
+                    command_dict['targetTemperatureUnit'] = 'farenheit'
+                else:
+                    command_dict['targetTemperatureUnit'] = 'celsius'
+                if temperature_value is not None:
+                    command_dict['targetTemperature'] = round(temperature_value * 2) / 2
+            if 'target_temperature_unit' in command_arguments:
+                if command_arguments['target_temperature_unit'] == Temperature.C:
+                    command_dict['targetTemperatureUnit'] = 'celsius'
+                elif command_arguments['target_temperature_unit'] == Temperature.F:
+                    command_dict['targetTemperatureUnit'] = 'farenheit'
+                else:
+                    command_dict['targetTemperatureUnit'] = 'celsius'
         elif command_arguments['command'] == ClimatizationStartStopCommand.Command.STOP:
-            command_str = 'stop'
+            url: str = f'https://ola.prod.code.seat.cloud.vwgroup.com/vehicles/{vin}/climatisation/requests/stop'
         else:
             raise CommandError(f'Unknown command {command_arguments["command"]}')
-
-        url: str = f'https://ola.prod.code.seat.cloud.vwgroup.com/vehicles/{vin}/climatisation/requests/{command_str}'
         command_response: requests.Response = self.session.post(url, data=json.dumps(command_dict), allow_redirects=True)
         if command_response.status_code not in [requests.codes['ok'], requests.codes['created']]:
             LOG.error('Could not start/stop air conditioning (%s: %s)', command_response.status_code, command_response.text)

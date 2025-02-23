@@ -41,7 +41,7 @@ class SeatCupraVehicle(GenericVehicle):  # pylint: disable=too-many-instance-att
                 self._car_images = origin._car_images
         else:
             super().__init__(vin=vin, garage=garage, managing_connector=managing_connector)
-            self.climatization = SeatCupraClimatization(origin=self.climatization)
+            self.climatization = SeatCupraClimatization(vehicle=self, origin=self.climatization)
             self.capabilities: Capabilities = Capabilities(vehicle=self)
             if SUPPORT_IMAGES:
                 self._car_images: Dict[str, Image.Image] = {}
