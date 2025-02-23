@@ -5,6 +5,7 @@ from typing import TYPE_CHECKING
 from carconnectivity.vehicle import GenericVehicle, ElectricVehicle, CombustionVehicle, HybridVehicle
 
 from carconnectivity_connectors.seatcupra.capability import Capabilities
+from carconnectivity_connectors.seatcupra.climatization import SeatCupraClimatization
 
 SUPPORT_IMAGES = False
 try:
@@ -38,12 +39,13 @@ class SeatCupraVehicle(GenericVehicle):  # pylint: disable=too-many-instance-att
             self.capabilities.parent = self
             if SUPPORT_IMAGES:
                 self._car_images = origin._car_images
-            
         else:
             super().__init__(vin=vin, garage=garage, managing_connector=managing_connector)
+            self.climatization = SeatCupraClimatization(origin=self.climatization)
             self.capabilities: Capabilities = Capabilities(vehicle=self)
             if SUPPORT_IMAGES:
                 self._car_images: Dict[str, Image.Image] = {}
+
 
 
 class SeatCupraElectricVehicle(ElectricVehicle, SeatCupraVehicle):

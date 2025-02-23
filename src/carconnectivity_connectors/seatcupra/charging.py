@@ -32,7 +32,7 @@ class SeatCupraCharging(Charging):  # pylint: disable=too-many-instance-attribut
         """
         OFF = 'off'
         READY_FOR_CHARGING = 'readyForCharging'
-        NOT_READY_FOR_CHARGING = 'NotReadyForCharging'
+        NOT_READY_FOR_CHARGING = 'notReadyForCharging'
         CONSERVATION = 'conservation'
         CHARGE_PURPOSE_REACHED_NOT_CONSERVATION_CHARGING = 'chargePurposeReachedAndNotConservationCharging'
         CHARGE_PURPOSE_REACHED_CONSERVATION = 'chargePurposeReachedAndConservation'

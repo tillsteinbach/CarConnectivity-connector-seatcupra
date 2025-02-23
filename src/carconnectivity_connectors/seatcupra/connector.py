@@ -15,7 +15,7 @@ from carconnectivity.garage import Garage
 from carconnectivity.errors import AuthenticationError, TooManyRequestsError, RetrievalError, APIError, APICompatibilityError, \
     TemporaryAuthenticationError, SetterError, CommandError
 from carconnectivity.util import robust_time_parse, log_extra_keys, config_remove_credentials
-from carconnectivity.units import Length, Power, Speed
+from carconnectivity.units import Length, Current
 from carconnectivity.doors import Doors
 from carconnectivity.windows import Windows
 from carconnectivity.lights import Lights
@@ -27,6 +27,7 @@ from carconnectivity.command_impl import ClimatizationStartStopCommand, WakeSlee
 from carconnectivity.climatization import Climatization
 from carconnectivity.commands import Commands
 from carconnectivity.charging import Charging
+from carconnectivity.charging_connector import ChargingConnector
 from carconnectivity.position import Position
 
 from carconnectivity_connectors.base.connector import BaseConnector
@@ -36,6 +37,8 @@ from carconnectivity_connectors.seatcupra._version import __version__
 from carconnectivity_connectors.seatcupra.capability import Capability
 from carconnectivity_connectors.seatcupra.vehicle import SeatCupraVehicle, SeatCupraElectricVehicle, SeatCupraCombustionVehicle, SeatCupraHybridVehicle
 from carconnectivity_connectors.seatcupra.charging import SeatCupraCharging, mapping_seatcupra_charging_state
+from carconnectivity_connectors.seatcupra.climatization import SeatCupraClimatization
+from carconnectivity_connectors.seatcupra.command_impl import SpinCommand
 
 SUPPORT_IMAGES = False
 try:
@@ -222,6 +225,12 @@ class Connector(BaseConnector):
 
         This method calls the `fetch_vehicles` method to retrieve vehicle data.
         """
+        # Add spin command
+        if self.commands is not None and not self.commands.contains_command('spin'):
+            spin_command = SpinCommand(parent=self.commands)
+            spin_command._add_on_set_hook(self.__on_spin)  # pylint: disable=protected-access
+            spin_command.enabled = True
+            self.commands.add_command(spin_command)
         self.fetch_vehicles()
         self.car_connectivity.transaction_end()
 
@@ -339,10 +348,10 @@ class Connector(BaseConnector):
                                     else:
                                         raise APIError('Could not fetch capabilities, capability ID missing')
                                     log_extra_keys(LOG_API, 'capability', capability_dict,  {'id', 'expirationDate', 'editable', 'parameters'})
-                                    
+
                                 for capability_id in vehicle.capabilities.capabilities.keys() - found_capabilities:
                                     vehicle.capabilities.remove_capability(capability_id)
-                                
+
                                 if vehicle.capabilities.has_capability('charging'):
                                     if not isinstance(vehicle, SeatCupraElectricVehicle):
                                         LOG.debug('Promoting %s to SeatCupraElectricVehicle object for %s', vehicle.__class__.__name__, vin)
@@ -353,7 +362,7 @@ class Connector(BaseConnector):
                                         charging_start_stop_command._add_on_set_hook(self.__on_charging_start_stop)  # pylint: disable=protected-access
                                         charging_start_stop_command.enabled = True
                                         vehicle.charging.commands.add_command(charging_start_stop_command)
-                                
+
                                 if vehicle.capabilities.has_capability('climatisation'):
                                     if vehicle.climatization is not None and vehicle.climatization.commands is not None \
                                             and not vehicle.climatization.commands.contains_command('start-stop'):
@@ -363,8 +372,34 @@ class Connector(BaseConnector):
                                         climatisation_start_stop_command._add_on_set_hook(self.__on_air_conditioning_start_stop)
                                         climatisation_start_stop_command.enabled = True
                                         vehicle.climatization.commands.add_command(climatisation_start_stop_command)
-                            else:
-                                vehicle.capabilities.clear_capabilities()
+
+                                if vehicle.capabilities.has_capability('vehicleWakeUpTrigger'):
+                                    if vehicle.commands is not None and vehicle.commands.commands is not None \
+                                            and not vehicle.commands.contains_command('wake-sleep'):
+                                        wake_sleep_command = WakeSleepCommand(parent=vehicle.commands)
+                                        wake_sleep_command._add_on_set_hook(self.__on_wake_sleep)  # pylint: disable=protected-access
+                                        wake_sleep_command.enabled = True
+                                        vehicle.commands.add_command(wake_sleep_command)
+
+                                # Add honkAndFlash command if necessary capabilities are available
+                                if vehicle.capabilities.has_capability('honkAndFlash'):
+                                    if vehicle.commands is not None and vehicle.commands.commands is not None \
+                                            and not vehicle.commands.contains_command('honk-flash'):
+                                        honk_flash_command = HonkAndFlashCommand(parent=vehicle.commands, with_duration=True)
+                                        honk_flash_command._add_on_set_hook(self.__on_honk_flash)  # pylint: disable=protected-access
+                                        honk_flash_command.enabled = True
+                                        vehicle.commands.add_command(honk_flash_command)
+
+                                # Add lock and unlock command
+                                if vehicle.capabilities.has_capability('access'):
+                                    if vehicle.doors is not None and vehicle.doors.commands is not None and vehicle.doors.commands.commands is not None \
+                                            and not vehicle.doors.commands.contains_command('lock-unlock'):
+                                        lock_unlock_command = LockUnlockCommand(parent=vehicle.doors.commands)
+                                        lock_unlock_command._add_on_set_hook(self.__on_lock_unlock)  # pylint: disable=protected-access
+                                        lock_unlock_command.enabled = True
+                                        vehicle.doors.commands.add_command(lock_unlock_command)
+                                    else:
+                                        vehicle.capabilities.clear_capabilities()
                         if isinstance(vehicle, SeatCupraVehicle):
                             vehicle = self.fetch_image(vehicle)
                     else:
@@ -388,7 +423,7 @@ class Connector(BaseConnector):
         vin = vehicle.vin.value
         if vin is None:
             raise APIError('VIN is missing')
-        
+
         url = f'https://ola.prod.code.seat.cloud.vwgroup.com/vehicles/{vin}/connection'
         vehicle_connection_data: Dict[str, Any] | None = self._fetch_data(url=url, session=self.session, no_cache=no_cache)
         if vehicle_connection_data is not None:
@@ -516,11 +551,10 @@ class Connector(BaseConnector):
         vin = vehicle.vin.value
         if vin is None:
             raise APIError('VIN is missing')
-        url = f'https://ola.prod.code.seat.cloud.vwgroup.com/v1/vehicles/{vin}/measurements/engines'
-        vehicle_status_data: Dict[str, Any] | None = self._fetch_data(url=url, session=self.session, no_cache=no_cache)
-        #measurements
-        #{'primary': {'fuelType': 'gasoline', 'rangeInKm': 120.0}, 'secondary': {'fuelType': 'electric', 'rangeInKm': 40.0}}
-        print(vehicle_status_data)
+        # url = f'https://ola.prod.code.seat.cloud.vwgroup.com/v1/vehicles/{vin}/measurements/engines'
+        # vehicle_status_data: Dict[str, Any] | None = self._fetch_data(url=url, session=self.session, no_cache=no_cache)
+        # measurements
+        # {'primary': {'fuelType': 'gasoline', 'rangeInKm': 120.0}, 'secondary': {'fuelType': 'electric', 'rangeInKm': 40.0}}
         url = f'https://ola.prod.code.seat.cloud.vwgroup.com/v5/users/{self.session.user_id}/vehicles/{vin}/mycar'
         vehicle_status_data: Dict[str, Any] | None = self._fetch_data(url=url, session=self.session, no_cache=no_cache)
         if vehicle_status_data:
@@ -592,23 +626,6 @@ class Connector(BaseConnector):
             if 'services' in vehicle_status_data and vehicle_status_data['services'] is not None:
                 if 'charging' in vehicle_status_data['services'] and vehicle_status_data['services']['charging'] is not None:
                     charging_status: Dict = vehicle_status_data['services']['charging']
-                    if 'status' in charging_status and charging_status['status'] is not None:
-                        if charging_status['status'] in SeatCupraCharging.SeatCupraChargingState:
-                            volkswagen_charging_state = SeatCupraCharging.SeatCupraChargingState(charging_status['status'])
-                            charging_state: Charging.ChargingState = mapping_seatcupra_charging_state[volkswagen_charging_state]
-                        else:
-                            LOG_API.info('Unkown charging state %s not in %s', charging_status['status'],
-                                         str(SeatCupraCharging.SeatCupraChargingState))
-                            charging_state = Charging.ChargingState.UNKNOWN
-                        if isinstance(vehicle, ElectricVehicle):
-                            vehicle.charging.state._set_value(value=charging_state)  # pylint: disable=protected-access
-                        else:
-                            LOG_API.warning('Vehicle is not an electric or hybrid vehicle, but charging state was fetched')
-                    else:
-                        if isinstance(vehicle, ElectricVehicle):
-                            vehicle.charging.state._set_value(None)  # pylint: disable=protected-access
-                        else:
-                            LOG_API.warning('Vehicle is not an electric or hybrid vehicle, but charging state was fetched')
                     if 'targetPct' in charging_status and charging_status['targetPct'] is not None:
                         if isinstance(vehicle, ElectricVehicle):
                             vehicle.charging.settings.target_level._set_value(charging_status['targetPct'])  # pylint: disable=protected-access
@@ -638,26 +655,7 @@ class Connector(BaseConnector):
                         vehicle.charging.enabled = False
                 if 'climatisation' in vehicle_status_data['services'] and vehicle_status_data['services']['climatisation'] is not None:
                     climatisation_status: Dict = vehicle_status_data['services']['climatisation']
-                    if 'status' in climatisation_status and climatisation_status['status'] is not None:
-                        if climatisation_status['status'].lower() in [item.value for item in Climatization.ClimatizationState]:
-                            climatization_state: Climatization.ClimatizationState = Climatization.ClimatizationState(climatisation_status['status'].lower())
-                        else:
-                            LOG_API.info('Unknown climatization state %s not in %s', climatisation_status['status'],
-                                         str(Climatization.ClimatizationState))
-                            climatization_state = Climatization.ClimatizationState.UNKNOWN
-                        vehicle.climatization.state._set_value(value=climatization_state)  # pylint: disable=protected-access
-                    else:
-                        vehicle.climatization.state._set_value(None)  # pylint: disable=protected-access
-                    if 'targetTemperatureCelsius' in climatisation_status and climatisation_status['targetTemperatureCelsius'] is not None:
-                        target_temperature: Optional[float] = climatisation_status['targetTemperatureCelsius']
-                        vehicle.climatization.settings.target_temperature._set_value(value=target_temperature,  # pylint: disable=protected-access
-                                                                                     unit=Temperature.C)
-                    elif 'targetTemperatureFahrenheit' in climatisation_status and climatisation_status['targetTemperatureFahrenheit'] is not None:
-                        target_temperature = climatisation_status['targetTemperatureFahrenheit']
-                        vehicle.climatization.settings.target_temperature._set_value(value=target_temperature,  # pylint: disable=protected-access
-                                                                                     unit=Temperature.F)
-                    else:
-                        vehicle.climatization.settings.target_temperature._set_value(None)  # pylint: disable=protected-access
+
                     if 'remainingTime' in climatisation_status and climatisation_status['remainingTime'] is not None:
                         remaining_duration: timedelta = timedelta(minutes=climatisation_status['remainingTime'])
                         estimated_date_reached: datetime = datetime.now(tz=timezone.utc) + remaining_duration
@@ -665,6 +663,7 @@ class Connector(BaseConnector):
                         vehicle.climatization.estimated_date_reached._set_value(value=estimated_date_reached)  # pylint: disable=protected-access
                     else:
                         vehicle.climatization.estimated_date_reached._set_value(None)  # pylint: disable=protected-access
+                    # we take status, targetTemperatureCelsius, targetTemperatureFahrenheit, from climatization request
                     log_extra_keys(LOG_API, 'climatisation', climatisation_status, {'status', 'targetTemperatureCelsius', 'targetTemperatureFahrenheit',
                                                                                     'remainingTime'})
         return vehicle
@@ -757,12 +756,68 @@ class Connector(BaseConnector):
             raise APIError('VIN is missing')
         url = f'https://ola.prod.code.seat.cloud.vwgroup.com/v1/vehicles/{vin}/climatisation/status'
         data: Dict[str, Any] | None = self._fetch_data(url=url, session=self.session, no_cache=no_cache)
-        #{'climatisationStatus': {'carCapturedTimestamp': '2025-02-18T17:24:02Z', 'climatisationState': 'off', 'climatisationTrigger': 'unsupported'}, 'windowHeatingStatus': {'carCapturedTimestamp': '2025-02-18T16:57:51Z', 'windowHeatingStatus': [{'windowLocation': 'front', 'windowHeatingState': 'off'}, {'windowLocation': 'rear', 'windowHeatingState': 'off'}]}}
-        print(data)
+        # {'climatisationStatus': {'carCapturedTimestamp': '2025-02-18T17:24:02Z', 'climatisationState': 'off', 'climatisationTrigger': 'unsupported'}, 'windowHeatingStatus': {'carCapturedTimestamp': '2025-02-18T16:57:51Z', 'windowHeatingStatus': [{'windowLocation': 'front', 'windowHeatingState': 'off'}, {'windowLocation': 'rear', 'windowHeatingState': 'off'}]}}
+        if data is not None:
+            if 'climatisationStatus' in data and data['climatisationStatus'] is not None:
+                climatisation_status: Dict = data['climatisationStatus']
+                if 'carCapturedTimestamp' not in climatisation_status or climatisation_status['carCapturedTimestamp'] is None:
+                    raise APIError('Could not fetch vehicle status, carCapturedTimestamp missing')
+                captured_at: datetime = robust_time_parse(climatisation_status['carCapturedTimestamp'])
+                if 'climatisationState' in climatisation_status and climatisation_status['climatisationState'] is not None:
+                    if climatisation_status['climatisationState'].lower() in [item.value for item in Climatization.ClimatizationState]:
+                        climatization_state: Climatization.ClimatizationState = \
+                            Climatization.ClimatizationState(climatisation_status['climatisationState'].lower())
+                    else:
+                        LOG_API.info('Unknown climatization state %s not in %s', climatisation_status['climatisationState'],
+                                     str(Climatization.ClimatizationState))
+                        climatization_state = Climatization.ClimatizationState.UNKNOWN
+                    vehicle.climatization.state._set_value(value=climatization_state, measured=captured_at)  # pylint: disable=protected-access
+                else:
+                    vehicle.climatization.state._set_value(None)  # pylint: disable=protected-access
+                log_extra_keys(LOG_API, 'climatisation', data, {'carCapturedTimestamp', 'climatisationState'})
+            else:
+                vehicle.climatization.state._set_value(None)  # pylint: disable=protected-access
+            log_extra_keys(LOG_API, 'climatisation', data, {'climatisationStatus'})
         url = f'https://ola.prod.code.seat.cloud.vwgroup.com/v2/vehicles/{vin}/climatisation/settings'
         data: Dict[str, Any] | None = self._fetch_data(url=url, session=self.session, no_cache=no_cache)
-        #{'carCapturedTimestamp': '2025-02-18T17:23:47Z', 'climatisationWithoutExternalPower': True, 'targetTemperatureInCelsius': 22.0, 'targetTemperatureInFahrenheit': 72.0}
-        print(data)
+        if data is not None:
+            if not isinstance(vehicle.climatization, SeatCupraClimatization):
+                vehicle.climatization = SeatCupraClimatization(vehicle=vehicle, origin=vehicle.climatization)
+            if 'carCapturedTimestamp' not in data or data['carCapturedTimestamp'] is None:
+                raise APIError('Could not fetch vehicle status, carCapturedTimestamp missing')
+            captured_at: datetime = robust_time_parse(data['carCapturedTimestamp'])
+            if 'targetTemperatureInCelsius' in data and data['targetTemperatureInCelsius'] is not None:
+                # pylint: disable-next=protected-access
+                vehicle.climatization.settings.target_temperature._add_on_set_hook(self.__on_air_conditioning_settings_change)
+                vehicle.climatization.settings.target_temperature._is_changeable = True  # pylint: disable=protected-access
+
+                target_temperature: Optional[float] = data['targetTemperatureInCelsius']
+                vehicle.climatization.settings.target_temperature._set_value(value=target_temperature,  # pylint: disable=protected-access
+                                                                             measured=captured_at,
+                                                                             unit=Temperature.C)
+            elif 'targetTemperatureInFahrenheit' in data and data['targetTemperatureInFahrenheit'] is not None:
+                # pylint: disable-next=protected-access
+                vehicle.climatization.settings.target_temperature._add_on_set_hook(self.__on_air_conditioning_settings_change)
+                vehicle.climatization.settings.target_temperature._is_changeable = True  # pylint: disable=protected-access
+
+                target_temperature = data['targetTemperatureInFahrenheit']
+                vehicle.climatization.settings.target_temperature._set_value(value=target_temperature,  # pylint: disable=protected-access
+                                                                             measured=captured_at,
+                                                                             unit=Temperature.F)
+            else:
+                vehicle.climatization.settings.target_temperature._set_value(None)  # pylint: disable=protected-access
+            if 'climatisationWithoutExternalPower' in data and data['climatisationWithoutExternalPower'] is not None:
+                # pylint: disable-next=protected-access
+                vehicle.climatization.settings.climatization_without_external_power._add_on_set_hook(self.__on_air_conditioning_settings_change)
+                vehicle.climatization.settings.climatization_without_external_power._is_changeable = True  # pylint: disable=protected-access
+
+                # pylint: disable-next=protected-access
+                vehicle.climatization.settings.climatization_without_external_power._set_value(data['climatisationWithoutExternalPower'],
+                                                                                               measured=captured_at)
+            else:
+                vehicle.climatization.settings.climatization_without_external_power._set_value(None)  # pylint: disable=protected-access
+            log_extra_keys(LOG_API, f'https://ola.prod.code.seat.cloud.vwgroup.com/v2/vehicles/{vin}/climatisation/settings', data,
+                           {'carCapturedTimestamp', 'targetTemperatureInCelsius', 'targetTemperatureInFahrenheit', 'climatisationWithoutExternalPower'})
         return vehicle
 
     def fetch_charging(self, vehicle: SeatCupraVehicle, no_cache: bool = False) -> SeatCupraVehicle:
@@ -782,24 +837,98 @@ class Connector(BaseConnector):
         vin = vehicle.vin.value
         if vin is None:
             raise APIError('VIN is missing')
-        url = f'https://ola.prod.code.seat.cloud.vwgroup.com/v1/vehicles/{vin}/charging/status'
-        data: Dict[str, Any] | None = self._fetch_data(url=url, session=self.session, no_cache=no_cache)
-        #{'state': 'off', 'battery': {'currentSocPercentage': 86, 'estimatedRangeInKm': 40}, 'charging': {'state': 'notReadyForCharging', 'type': 'off', 'mode': 'invalid'}, 'plug': {'connection': 'disconnected', 'externalPower': 'unavailable', 'lock': 'unlocked'}}
-        print(data)
-        url = f'https://ola.prod.code.seat.cloud.vwgroup.com/v1/vehicles/{vin}/charging/info'
-        data: Dict[str, Any] | None = self._fetch_data(url=url, session=self.session, no_cache=no_cache)
-        #{'settings': {'maxChargeCurrentAc': 'reduced', 'targetSoc': 100}, 'chargingCareSettings': {}, 'chargingCareStatus': {'batteryCareTargetSoc': 80}}
-        print(data)
-        url = f'https://ola.prod.code.seat.cloud.vwgroup.com/v1/vehicles/{vin}/charging/settings'
-        data: Dict[str, Any] | None = self._fetch_data(url=url, session=self.session, no_cache=no_cache)
-        #{'maxChargeCurrentAc': False, 'defaultMaxTargetSocPercentage': 100}
-        print(data)
+        if isinstance(vehicle, ElectricVehicle):
+            url = f'https://ola.prod.code.seat.cloud.vwgroup.com/v1/vehicles/{vin}/charging/status'
+            data: Dict[str, Any] | None = self._fetch_data(url=url, session=self.session, no_cache=no_cache)
+
+            if data is not None:
+                if 'charging' in data and data['charging'] is not None:
+                    if 'state' in data['charging'] and data['charging']['state'] is not None:
+                        if data['charging']['state'] in SeatCupraCharging.SeatCupraChargingState:
+                            volkswagen_charging_state = SeatCupraCharging.SeatCupraChargingState(data['charging']['state'])
+                            charging_state: Charging.ChargingState = mapping_seatcupra_charging_state[volkswagen_charging_state]
+                        else:
+                            LOG_API.info('Unkown charging state %s not in %s', data['charging']['state'],
+                                        str(SeatCupraCharging.SeatCupraChargingState))
+                            charging_state = Charging.ChargingState.UNKNOWN
+                        vehicle.charging.state._set_value(value=charging_state)  # pylint: disable=protected-access
+                    else:
+                        vehicle.charging.state._set_value(None)  # pylint: disable=protected-access
+                    log_extra_keys(LOG_API, 'charging',  data['charging'], {'state'})
+                if 'plug' in data and data['plug'] is not None:
+                    if 'connection' in data['plug'] and data['plug']['connection'] is not None:
+                        if data['plug']['connection'] in [item.value for item in ChargingConnector.ChargingConnectorConnectionState]:
+                            plug_state: ChargingConnector.ChargingConnectorConnectionState = \
+                                ChargingConnector.ChargingConnectorConnectionState(data['plug']['connection'])
+                        else:
+                            LOG_API.info('Unknown plug state %s', data['plug']['connection'])
+                            plug_state = ChargingConnector.ChargingConnectorConnectionState.UNKNOWN
+                        vehicle.charging.connector.connection_state._set_value(value=plug_state)  # pylint: disable=protected-access
+                    else:
+                        vehicle.charging.connector.connection_state._set_value(value=None)  # pylint: disable=protected-access
+                    if 'externalPower' in data['plug'] and data['plug']['externalPower'] is not None:
+                        if data['plug']['externalPower'] in [item.value for item in ChargingConnector.ExternalPower]:
+                            plug_power_state: ChargingConnector.ExternalPower = \
+                                ChargingConnector.ExternalPower(data['plug']['externalPower'])
+                        else:
+                            LOG_API.info('Unknown plug power state %s', data['plug']['externalPower'])
+                            plug_power_state = ChargingConnector.ExternalPower.UNKNOWN
+                        vehicle.charging.connector.external_power._set_value(value=plug_power_state)  # pylint: disable=protected-access
+                    else:
+                        vehicle.charging.connector.external_power._set_value(None)  # pylint: disable=protected-access
+                    if 'lock' in data['plug'] and data['plug']['lock'] is not None:
+                        if data['plug']['lock'] in [item.value for item in ChargingConnector.ChargingConnectorLockState]:
+                            plug_lock_state: ChargingConnector.ChargingConnectorLockState = \
+                                ChargingConnector.ChargingConnectorLockState(data['plug']['lock'])
+                        else:
+                            LOG_API.info('Unknown plug lock state %s', data['plug']['lock'])
+                            plug_lock_state = ChargingConnector.ChargingConnectorLockState.UNKNOWN
+                        vehicle.charging.connector.lock_state._set_value(value=plug_lock_state)  # pylint: disable=protected-access
+                    else:
+                        vehicle.charging.connector.lock_state._set_value(None)  # pylint: disable=protected-access
+                    log_extra_keys(LOG_API, 'plug', data['plug'], {'connection', 'externalPower', 'lock'})
+                log_extra_keys(LOG_API, f'https://ola.prod.code.seat.cloud.vwgroup.com/v1/vehicles/{vin}/charging/status', data,
+                               {'state', 'battery', 'charging', 'plug'})
+
+            url = f'https://ola.prod.code.seat.cloud.vwgroup.com/v1/vehicles/{vin}/charging/settings'
+            data: Dict[str, Any] | None = self._fetch_data(url=url, session=self.session, no_cache=no_cache)
+            if data is not None:
+                if 'maxChargeCurrentAc' in data and data['maxChargeCurrentAc'] is not None:
+                    if data['maxChargeCurrentAc']:
+                        vehicle.charging.settings.maximum_current._set_value(value=16,  # pylint: disable=protected-access
+                                                                             unit=Current.A)
+                    else:
+                        vehicle.charging.settings.maximum_current._set_value(value=6,  # pylint: disable=protected-access
+                                                                             unit=Current.A)
+                else:
+                    vehicle.charging.settings.maximum_current._set_value(None)  # pylint: disable=protected-access
+                if 'defaultMaxTargetSocPercentage' in data and data['defaultMaxTargetSocPercentage'] is not None:
+                    vehicle.charging.settings.target_level._set_value(data['defaultMaxTargetSocPercentage'])  # pylint: disable=protected-access
+                else:
+                    vehicle.charging.settings.target_level._set_value(None)  # pylint: disable=protected-access
         return vehicle
 
     def fetch_image(self, vehicle: SeatCupraVehicle, no_cache: bool = False) -> SeatCupraVehicle:
+        """
+        Fetches the image of a given SeatCupraVehicle.
+
+        This method retrieves the image of the vehicle from a remote server. It supports caching to avoid redundant downloads.
+        If caching is enabled and the image is found in the cache and is not expired, it will be loaded from the cache.
+        Otherwise, it will be downloaded from the server.
+
+        Args:
+            vehicle (SeatCupraVehicle): The vehicle object for which the image is to be fetched.
+            no_cache (bool, optional): If True, bypasses the cache and fetches the image directly from the server. Defaults to False.
+
+        Returns:
+            SeatCupraVehicle: The vehicle object with the fetched image added to its attributes.
+
+        Raises:
+            RetrievalError: If there is a connection error, chunked encoding error, read timeout, or retry error during the image retrieval process.
+        """
         if SUPPORT_IMAGES:
             url: str = f'https://ola.prod.code.seat.cloud.vwgroup.com/v1/vehicles/{vehicle.vin.value}/renders'
-            data = self._fetch_data(url, session=self.session, allow_http_error=True)
+            data = self._fetch_data(url, session=self.session, allow_http_error=True, no_cache=no_cache)
             if data is not None:  # pylint: disable=too-many-nested-blocks
                 for image_id, image_url in data.items():
                     if image_id == 'isDefault':
@@ -814,7 +943,7 @@ class Connector(BaseConnector):
                     if img is None or self.active_config['max_age'] is None \
                             or (cache_date is not None and cache_date < (datetime.utcnow() - timedelta(seconds=self.active_config['max_age']))):
                         try:
-                            image_download_response = requests.get(image_url, stream=True)
+                            image_download_response = requests.get(image_url, stream=True, timeout=180)
                             if image_download_response.status_code == requests.codes['ok']:
                                 img = Image.open(image_download_response.raw)  # pyright: ignore[reportPossiblyUnboundVariable]
                                 if self.session.cache is not None:
@@ -963,6 +1092,168 @@ class Connector(BaseConnector):
             LOG.error('Could not start/stop air conditioning (%s: %s)', command_response.status_code, command_response.text)
             raise CommandError(f'Could not start/stop air conditioning ({command_response.status_code}: {command_response.text})')
         return command_arguments
+
+    def __on_spin(self, spin_command: SpinCommand, command_arguments: Union[str, Dict[str, Any]]) \
+            -> Union[str, Dict[str, Any]]:
+        del spin_command
+        if not isinstance(command_arguments, dict):
+            raise CommandError('Command arguments are not a dictionary')
+        if 'command' not in command_arguments:
+            raise CommandError('Command argument missing')
+        command_dict = {}
+        if self.active_config['spin'] is None:
+            raise CommandError('S-PIN is missing, please add S-PIN to your configuration or .netrc file')
+        if 'spin' in command_arguments:
+            command_dict['currentSpin'] = command_arguments['spin']
+        else:
+            if self.active_config['spin'] is None or self.active_config['spin'] == '':
+                raise CommandError('S-PIN is missing, please add S-PIN to your configuration or .netrc file')
+            command_dict['spin'] = self.active_config['spin']
+        if command_arguments['command'] == SpinCommand.Command.VERIFY:
+            url = f'https://ola.prod.code.seat.cloud.vwgroup.com/v2/users/{self.session.user_id}/spin/verify'
+        else:
+            raise CommandError(f'Unknown command {command_arguments["command"]}')
+        command_response: requests.Response = self.session.post(url, data=json.dumps(command_dict), allow_redirects=True)
+        if command_response.status_code != requests.codes['ok']:
+            LOG.error('Could not execute spin command (%s: %s)', command_response.status_code, command_response.text)
+            raise CommandError(f'Could not execute spin command ({command_response.status_code}: {command_response.text})')
+        else:
+            LOG.info('Spin verify command executed successfully')
+        return command_arguments
+
+    def __on_wake_sleep(self, wake_sleep_command: WakeSleepCommand, command_arguments: Union[str, Dict[str, Any]]) \
+            -> Union[str, Dict[str, Any]]:
+        if wake_sleep_command.parent is None or wake_sleep_command.parent.parent is None \
+                or not isinstance(wake_sleep_command.parent.parent, GenericVehicle):
+            raise CommandError('Object hierarchy is not as expected')
+        if not isinstance(command_arguments, dict):
+            raise CommandError('Command arguments are not a dictionary')
+        vehicle: GenericVehicle = wake_sleep_command.parent.parent
+        vin: Optional[str] = vehicle.vin.value
+        if vin is None:
+            raise CommandError('VIN in object hierarchy missing')
+        if 'command' not in command_arguments:
+            raise CommandError('Command argument missing')
+        if command_arguments['command'] == WakeSleepCommand.Command.WAKE:
+            url = f'https://ola.prod.code.seat.cloud.vwgroup.com/v1/vehicles/{vin}/vehicle-wakeup/request'
+
+            command_response: requests.Response = self.session.post(url, data='{}', allow_redirects=True)
+            if command_response.status_code not in (requests.codes['ok'], requests.codes['no_content']):
+                LOG.error('Could not execute wake command (%s: %s)', command_response.status_code, command_response.text)
+                raise CommandError(f'Could not execute wake command ({command_response.status_code}: {command_response.text})')
+        elif command_arguments['command'] == WakeSleepCommand.Command.SLEEP:
+            raise CommandError('Sleep command not supported by vehicle. Vehicle will put itself to sleep')
+        else:
+            raise CommandError(f'Unknown command {command_arguments["command"]}')
+        return command_arguments
+
+    def __on_honk_flash(self, honk_flash_command: HonkAndFlashCommand, command_arguments: Union[str, Dict[str, Any]]) \
+            -> Union[str, Dict[str, Any]]:
+        if honk_flash_command.parent is None or honk_flash_command.parent.parent is None \
+                or not isinstance(honk_flash_command.parent.parent, GenericVehicle):
+            raise CommandError('Object hierarchy is not as expected')
+        if not isinstance(command_arguments, dict):
+            raise CommandError('Command arguments are not a dictionary')
+        vehicle: GenericVehicle = honk_flash_command.parent.parent
+        vin: Optional[str] = vehicle.vin.value
+        if vin is None:
+            raise CommandError('VIN in object hierarchy missing')
+        if 'command' not in command_arguments:
+            raise CommandError('Command argument missing')
+        command_dict = {}
+        if command_arguments['command'] in [HonkAndFlashCommand.Command.FLASH, HonkAndFlashCommand.Command.HONK_AND_FLASH]:
+            if 'duration' in command_arguments:
+                command_dict['durationInSeconds'] = command_arguments['duration']
+            else:
+                command_dict['durationInSeconds'] = 10
+            command_dict['mode'] = command_arguments['command'].value
+            command_dict['userPosition'] = {}
+            if vehicle.position is None or vehicle.position.latitude is None or vehicle.position.longitude is None \
+                    or vehicle.position.latitude.value is None or vehicle.position.longitude.value is None \
+                    or not vehicle.position.latitude.enabled or not vehicle.position.longitude.enabled:
+                raise CommandError('Can only execute honk and flash commands if vehicle position is known')
+            command_dict['userPosition']['latitude'] = vehicle.position.latitude.value
+            command_dict['userPosition']['longitude'] = vehicle.position.longitude.value
+
+            url = f'https://ola.prod.code.seat.cloud.vwgroup.com/v1/vehicles/{vin}/honk-and-flash'
+            command_response: requests.Response = self.session.post(url, data=json.dumps(command_dict), allow_redirects=True)
+            if command_response.status_code not in (requests.codes['ok'], requests.codes['no_content']):
+                LOG.error('Could not execute honk or flash command (%s: %s)', command_response.status_code, command_response.text)
+                raise CommandError(f'Could not execute honk or flash command ({command_response.status_code}: {command_response.text})')
+        else:
+            raise CommandError(f'Unknown command {command_arguments["command"]}')
+        return command_arguments
+
+    def __on_lock_unlock(self, lock_unlock_command: LockUnlockCommand, command_arguments: Union[str, Dict[str, Any]]) \
+            -> Union[str, Dict[str, Any]]:
+        if lock_unlock_command.parent is None or lock_unlock_command.parent.parent is None \
+                or lock_unlock_command.parent.parent.parent is None or not isinstance(lock_unlock_command.parent.parent.parent, GenericVehicle):
+            raise CommandError('Object hierarchy is not as expected')
+        if not isinstance(command_arguments, dict):
+            raise SetterError('Command arguments are not a dictionary')
+        vehicle: GenericVehicle = lock_unlock_command.parent.parent.parent
+        vin: Optional[str] = vehicle.vin.value
+        if vin is None:
+            raise CommandError('VIN in object hierarchy missing')
+        if 'command' not in command_arguments:
+            raise CommandError('Command argument missing')
+        command_dict = {}
+        if 'spin' in command_arguments:
+            command_dict['spin'] = command_arguments['spin']
+        else:
+            if self.active_config['spin'] is None:
+                raise CommandError('S-PIN is missing, please add S-PIN to your configuration or .netrc file')
+            command_dict['spin'] = self.active_config['spin']
+        if command_arguments['command'] == LockUnlockCommand.Command.LOCK:
+            url = f'https://ola.prod.code.seat.cloud.vwgroup.com/v1/vehicles/{vin}/access/lock'
+        elif command_arguments['command'] == LockUnlockCommand.Command.UNLOCK:
+            url = f'https://ola.prod.code.seat.cloud.vwgroup.com/v1/vehicles/{vin}/access/unlock'
+        else:
+            raise CommandError(f'Unknown command {command_arguments["command"]}')
+        command_response: requests.Response = self.session.post(url, data=json.dumps(command_dict), allow_redirects=True)
+        if command_response.status_code != requests.codes['ok']:
+            LOG.error('Could not execute locking command (%s: %s)', command_response.status_code, command_response.text)
+            raise CommandError(f'Could not execute locking command ({command_response.status_code}: {command_response.text})')
+        return command_arguments
+
+    def __on_air_conditioning_settings_change(self, attribute: GenericAttribute, value: Any) -> Any:
+        """
+        Callback for the climatization setting change.
+        """
+        if attribute.parent is None or not isinstance(attribute.parent, SeatCupraClimatization.Settings) \
+                or attribute.parent.parent is None \
+                or attribute.parent.parent.parent is None or not isinstance(attribute.parent.parent.parent, SeatCupraVehicle):
+            raise SetterError('Object hierarchy is not as expected')
+        settings: SeatCupraClimatization.Settings = attribute.parent
+        vehicle: SeatCupraVehicle = attribute.parent.parent.parent
+        vin: Optional[str] = vehicle.vin.value
+        if vin is None:
+            raise SetterError('VIN in object hierarchy missing')
+        setting_dict = {}
+        if settings.target_temperature.enabled and settings.target_temperature.value is not None:
+            # Round target temperature to nearest 0.5
+            # Check if the attribute changed is the target_temperature attribute
+            if isinstance(attribute, TemperatureAttribute) and attribute.id == 'target_temperature':
+                setting_dict['targetTemperature'] = round(value * 2) / 2
+            else:
+                setting_dict['targetTemperature'] = round(settings.target_temperature.value * 2) / 2
+            if settings.target_temperature.unit == Temperature.C:
+                setting_dict['targetTemperatureUnit'] = 'celsius'
+            elif settings.target_temperature.unit == Temperature.F:
+                setting_dict['targetTemperatureUnit'] = 'farenheit'
+            else:
+                setting_dict['targetTemperatureUnit'] = 'celsius'
+        if isinstance(attribute, BooleanAttribute) and attribute.id == 'climatisation_without_external_power':
+            setting_dict['climatisationWithoutExternalPower'] = value
+        elif settings.climatization_without_external_power.enabled and settings.climatization_without_external_power.value is not None:
+            setting_dict['climatisationWithoutExternalPower'] = settings.climatization_without_external_power.value
+
+        url: str = f'https://ola.prod.code.seat.cloud.vwgroup.com/v2/vehicles/{vin}/climatisation/settings'
+        settings_response: requests.Response = self.session.post(url, data=json.dumps(setting_dict), allow_redirects=True)
+        if settings_response.status_code not in [requests.codes['ok'], requests.codes['created']]:
+            LOG.error('Could not set climatization settings (%s) %s', settings_response.status_code, settings_response.text)
+            raise SetterError(f'Could not set value ({settings_response.status_code}): {settings_response.text}')
+        return value
 
     def get_version(self) -> str:
         return __version__
