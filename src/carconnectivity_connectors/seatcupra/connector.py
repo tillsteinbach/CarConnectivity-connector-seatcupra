@@ -1050,9 +1050,19 @@ class Connector(BaseConnector):
             raise CommandError('VIN in object hierarchy missing')
         if 'command' not in command_arguments:
             raise CommandError('Command argument missing')
+        command_dict: Dict = {}
         if command_arguments['command'] == ChargingStartStopCommand.Command.START:
             url = f'https://ola.prod.code.seat.cloud.vwgroup.com/vehicles/{vin}/charging/requests/start'
-            command_response: requests.Response = self.session.post(url, data='{}', allow_redirects=True)
+            if isinstance(vehicle, SeatCupraElectricVehicle) and vehicle.charging is not None and vehicle.charging.settings is not None \
+                    and vehicle.charging.settings.maximum_current is not None and vehicle.charging.settings.maximum_current.enabled \
+                    and vehicle.charging.settings.maximum_current.value is not None:
+                if vehicle.charging.settings.maximum_current.value <= 6:
+                    command_dict['maxChargeCurrentAC'] = 'reduced'
+                else:
+                    command_dict['maxChargeCurrentAC'] = 'maximum'
+            else:
+                command_dict['maxChargeCurrentAC'] = 'maximum'
+            command_response: requests.Response = self.session.post(url, data=json.dumps(command_dict), allow_redirects=True)
         elif command_arguments['command'] == ChargingStartStopCommand.Command.STOP:
             url = f'https://ola.prod.code.seat.cloud.vwgroup.com/vehicles/{vin}/charging/requests/stop'
             command_response: requests.Response = self.session.post(url, data='{}', allow_redirects=True)
