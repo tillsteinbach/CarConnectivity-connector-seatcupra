@@ -1134,7 +1134,7 @@ class Connector(BaseConnector):
         if self.active_config['spin'] is None:
             raise CommandError('S-PIN is missing, please add S-PIN to your configuration or .netrc file')
         if 'spin' in command_arguments:
-            command_dict['currentSpin'] = command_arguments['spin']
+            command_dict['spin'] = command_arguments['spin']
         else:
             if self.active_config['spin'] is None or self.active_config['spin'] == '':
                 raise CommandError('S-PIN is missing, please add S-PIN to your configuration or .netrc file')
