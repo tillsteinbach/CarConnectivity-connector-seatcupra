@@ -259,6 +259,8 @@ class Connector(BaseConnector):
                     vehicle_to_update = self.fetch_charging(vehicle_to_update)
                 if vehicle_to_update.capabilities.has_capability('parkingPosition'):
                     vehicle_to_update = self.fetch_parking_position(vehicle_to_update)
+                if vehicle_to_update.capabilities.has_capability('vehicleHealthInspection'):
+                    vehicle_to_update = self.fetch_maintenance(vehicle_to_update)
 
     def fetch_vehicles(self) -> None:
         """
@@ -737,6 +739,42 @@ class Connector(BaseConnector):
             vehicle.odometer._set_value(None)  # pylint: disable=protected-access
         return vehicle
 
+    def fetch_maintenance(self, vehicle: SeatCupraVehicle, no_cache: bool = False) -> SeatCupraVehicle:
+        vin = vehicle.vin.value
+        if vin is None:
+            raise APIError('VIN is missing')
+        url = f'https://ola.prod.code.seat.cloud.vwgroup.com/v1/vehicles/{vin}/maintenance'
+        data: Dict[str, Any] | None = self._fetch_data(url=url, session=self.session, no_cache=no_cache)
+        if data is not None:
+            if 'inspectionDueDays' in data and data['inspectionDueDays'] is not None:
+                inspection_due: timedelta = timedelta(days=data['inspectionDueDays'])
+                inspection_date: datetime = datetime.now(tz=timezone.utc) + inspection_due
+                inspection_date = inspection_date.replace(hour=0, minute=0, second=0, microsecond=0)
+                # pylint: disable-next=protected-access
+                vehicle.maintenance.inspection_due_at._set_value(value=inspection_date)
+            else:
+                vehicle.maintenance.inspection_due_at._set_value(None)  # pylint: disable=protected-access
+            if 'inspectionDueKm' in data and data['inspectionDueKm'] is not None:
+                vehicle.maintenance.inspection_due_after._set_value(data['inspectionDueKm'], unit=Length.KM)  # pylint: disable=protected-access
+            else:
+                vehicle.maintenance.inspection_due_after._set_value(None)  # pylint: disable=protected-access
+            if 'oilServiceDueDays' in data and data['oilServiceDueDays'] is not None:
+                oil_service_due: timedelta = timedelta(days=data['oilServiceDueDays'])
+                oil_service_date: datetime = datetime.now(tz=timezone.utc) + oil_service_due
+                oil_service_date = oil_service_date.replace(hour=0, minute=0, second=0, microsecond=0)
+                # pylint: disable-next=protected-access
+                vehicle.maintenance.oil_service_due_at._set_value(value=oil_service_date)
+            else:
+                vehicle.maintenance.oil_service_due_at._set_value(None)  # pylint: disable=protected-access
+            if 'oilServiceDueKm' in data and data['oilServiceDueKm'] is not None:
+                vehicle.maintenance.oil_service_due_after._set_value(data['oilServiceDueKm'], unit=Length.KM)  # pylint: disable=protected-access
+            else:
+                vehicle.maintenance.oil_service_due_after._set_value(None)  # pylint: disable=protected-access
+            log_extra_keys(LOG_API, f'/v1/vehicles/{vin}/maintenance', data,  {'inspectionDueDays', 'inspectionDueKm', 'oilServiceDueDays', 'oilServiceDueKm'})
+        else:
+            vehicle.odometer._set_value(None)  # pylint: disable=protected-access
+        return vehicle
+
     def fetch_climatisation(self, vehicle: SeatCupraVehicle, no_cache: bool = False) -> SeatCupraVehicle:
         """
         Fetches the mileage of the given vehicle and updates its mileage attributes.
@@ -1062,7 +1100,7 @@ class Connector(BaseConnector):
                     command_dict['maxChargeCurrentAC'] = 'maximum'
             else:
                 command_dict['maxChargeCurrentAC'] = 'maximum'
-            command_response: requests.Response = self.session.post(url, data=json.dumps(command_dict), allow_redirects=True)
+            command_response: requests.Response = self.session.post(url, json=command_dict, allow_redirects=True)
         elif command_arguments['command'] == ChargingStartStopCommand.Command.STOP:
             url = f'https://ola.prod.code.seat.cloud.vwgroup.com/vehicles/{vin}/charging/requests/stop'
             command_response: requests.Response = self.session.post(url, data='{}', allow_redirects=True)
