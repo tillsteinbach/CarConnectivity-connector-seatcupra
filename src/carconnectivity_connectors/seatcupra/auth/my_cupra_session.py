@@ -84,9 +84,10 @@ class MyCupraSession(VWWebSession):
 
     def refresh(self) -> None:
         # refresh tokens from refresh endpoint
-        self.refresh_tokens(
-            'https://identity.vwgroup.io/oidc/v1/token',
-        )
+        if self.is_seat:
+            self.refresh_tokens('https://ola.prod.code.seat.cloud.vwgroup.com/authorization/api/v1/token')
+        else:
+            self.refresh_tokens('https://identity.vwgroup.io/oidc/v1/token')
 
     def fetch_tokens(
         self,
