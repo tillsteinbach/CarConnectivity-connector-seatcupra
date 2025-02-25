@@ -1204,14 +1204,13 @@ class Connector(BaseConnector):
         command_dict = {'spin': spin}
         url = f'https://ola.prod.code.seat.cloud.vwgroup.com/v2/users/{self.session.user_id}/spin/verify'
         spin_verify_response: requests.Response = self.session.post(url, data=json.dumps(command_dict), allow_redirects=True)
-        if spin_verify_response.status_code != requests.codes['ok']:
+        if spin_verify_response.status_code != requests.codes['created']:
             raise AuthenticationError(f'Could not fetch security token ({spin_verify_response.status_code}: {spin_verify_response.text})')
         data = spin_verify_response.json()
         if 'securityToken' in data:
             return data['securityToken']
         raise AuthenticationError('Could not fetch security token')
 
-    
     def __on_spin(self, spin_command: SpinCommand, command_arguments: Union[str, Dict[str, Any]]) \
             -> Union[str, Dict[str, Any]]:
         del spin_command
@@ -1234,7 +1233,7 @@ class Connector(BaseConnector):
             raise CommandError(f'Unknown command {command_arguments["command"]}')
         try:
             command_response: requests.Response = self.session.post(url, data=json.dumps(command_dict), allow_redirects=True)
-            if command_response.status_code != requests.codes['ok']:
+            if command_response.status_code != requests.codes['created']:
                 LOG.error('Could not execute spin command (%s: %s)', command_response.status_code, command_response.text)
                 raise CommandError(f'Could not execute spin command ({command_response.status_code}: {command_response.text})')
             else:
