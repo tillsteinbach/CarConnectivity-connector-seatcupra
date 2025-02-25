@@ -23,7 +23,7 @@ from carconnectivity_connectors.seatcupra.auth.openid_session import AccessType
 from carconnectivity_connectors.seatcupra.auth.vw_web_session import VWWebSession
 
 if TYPE_CHECKING:
-    from typing import Tuple, Dict
+    from typing import Tuple, Dict, Any
 
 
 LOG: logging.Logger = logging.getLogger("carconnectivity.connectors.seatcupra.auth")
@@ -33,22 +33,40 @@ class MyCupraSession(VWWebSession):
     """
     MyCupraSession class handles the authentication and session management for Cupras's MyCupra service.
     """
-    def __init__(self, session_user, **kwargs) -> None:
-        super(MyCupraSession, self).__init__(client_id='3c756d46-f1ba-4d78-9f9a-cff0d5292d51@apps_vw-dilab_com',
-                                             refresh_url='https://identity.vwgroup.io/oidc/v1/token',
-                                             scope='openid profile nickname birthdate phone',
-                                             redirect_uri='cupra://oauth-callback',
-                                             state=None,
-                                             session_user=session_user,
-                                             **kwargs)
+    def __init__(self, session_user, is_seat: bool, **kwargs) -> None:
+        self.is_seat: bool = is_seat
+        if self.is_seat:
+            super(MyCupraSession, self).__init__(client_id='99a5b77d-bd88-4d53-b4e5-a539c60694a3@apps_vw-dilab_com',
+                                                refresh_url='https://identity.vwgroup.io/oidc/v1/token',
+                                                scope='openid profile nickname birthdate phone',
+                                                redirect_uri='seat://oauth-callback',
+                                                state=None,
+                                                session_user=session_user,
+                                                **kwargs)
 
-        self.headers = CaseInsensitiveDict({
-            'accept': '*/*',
-            'content-type': 'application/json',
-            'user-agent': 'CUPRAApp%20-%20Store/20220503 CFNetwork/1333.0.4 Darwin/21.5.0',
-            'accept-language': 'de-de',
-            'accept-encoding': 'gzip, deflate, br'
-        })
+            self.headers = CaseInsensitiveDict({
+                'accept': '*/*',
+                'content-type': 'application/json',
+                'user-agent': 'SEATApp/2.5.0 (com.seat.myseat.ola; build:202410171614; iOS 15.8.3) Alamofire/5.7.0 Mobile',
+                'accept-language': 'de-de',
+                'accept-encoding': 'gzip, deflate, br'
+            })
+        else:
+            super(MyCupraSession, self).__init__(client_id='3c756d46-f1ba-4d78-9f9a-cff0d5292d51@apps_vw-dilab_com',
+                                                refresh_url='https://identity.vwgroup.io/oidc/v1/token',
+                                                scope='openid profile nickname birthdate phone',
+                                                redirect_uri='cupra://oauth-callback',
+                                                state=None,
+                                                session_user=session_user,
+                                                **kwargs)
+
+            self.headers = CaseInsensitiveDict({
+                'accept': '*/*',
+                'content-type': 'application/json',
+                'user-agent': 'CUPRAApp%20-%20Store/20220503 CFNetwork/1333.0.4 Darwin/21.5.0',
+                'accept-language': 'de-de',
+                'accept-encoding': 'gzip, deflate, br'
+            })
 
     def login(self):
         super(MyCupraSession, self).login()
@@ -57,8 +75,12 @@ class MyCupraSession(VWWebSession):
         # perform web authentication
         response = self.do_web_auth(authorization_url_str)
         # fetch tokens from web authentication response
-        self.fetch_tokens('https://identity.vwgroup.io/oidc/v1/token',
-                          authorization_response=response)
+        if self.is_seat:
+            return self.fetch_tokens('https://ola.prod.code.seat.cloud.vwgroup.com/authorization/api/v1/token',
+                                     authorization_response=response)
+        else:
+            self.fetch_tokens('https://identity.vwgroup.io/oidc/v1/token',
+                              authorization_response=response)
 
     def refresh(self) -> None:
         # refresh tokens from refresh endpoint
@@ -92,15 +114,23 @@ class MyCupraSession(VWWebSession):
 
         if self.token is not None and all(key in self.token for key in ('state', 'id_token', 'access_token', 'code')):
             # Generate json body for token request
-            body: Dict[str, str] = {
-                'state': self.token['state'],
-                'id_token': self.token['id_token'],
-                'redirect_uri': self.redirect_uri,
-                'client_id': self.client_id,
-                'client_secret': 'eb8814e641c81a2640ad62eeccec11c98effc9bccd4269ab7af338b50a94b3a2',
-                'code': self.token['code'],
-                'grant_type': 'authorization_code'
-                }
+            if self.is_seat:
+                body: Dict[str, Any] = {'state': self.token['state'],
+                                        'id_token': self.token['id_token'],
+                                        'redirect_uri': self.redirect_uri,
+                                        'client_id': self.client_id,
+                                        'code': self.token['code'],
+                                        'grant_type': 'authorization_code'
+                                        }
+            else:
+                body: Dict[str, Any] = {'state': self.token['state'],
+                                        'id_token': self.token['id_token'],
+                                        'redirect_uri': self.redirect_uri,
+                                        'client_id': self.client_id,
+                                        'client_secret': 'eb8814e641c81a2640ad62eeccec11c98effc9bccd4269ab7af338b50a94b3a2',
+                                        'code': self.token['code'],
+                                        'grant_type': 'authorization_code'
+                                        }
 
             request_headers: CaseInsensitiveDict = dict(self.headers)  # pyright: ignore reportAssignmentType
             request_headers['content-type'] = 'application/x-www-form-urlencoded; charset=utf-8'

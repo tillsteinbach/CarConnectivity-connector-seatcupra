@@ -47,11 +47,13 @@ class Service(Enum):
 
     Attributes:
         MY_CUPRA (str): Represents the 'MyCupra' service.
+        MY_SEAT (str): Represents the 'MySeat' service.
 
     Methods:
         __str__() -> str: Returns the string representation of the service.
     """
     MY_CUPRA = 'MyCupra'
+    MY_SEAT = 'MySeat'
 
     def __str__(self) -> str:
         return self.value
@@ -127,7 +129,9 @@ class SessionManager():
             cache = self.cache[identifier]
 
         if service == Service.MY_CUPRA:
-            session = MyCupraSession(session_user=session_user, token=token, metadata=metadata, cache=cache)
+            session = MyCupraSession(session_user=session_user, is_seat=False, token=token, metadata=metadata, cache=cache)
+        elif service == Service.MY_SEAT:
+            session = MyCupraSession(session_user=session_user, is_seat=True, token=token, metadata=metadata, cache=cache)
         else:
             raise ValueError(f"Unsupported service: {service}")
 

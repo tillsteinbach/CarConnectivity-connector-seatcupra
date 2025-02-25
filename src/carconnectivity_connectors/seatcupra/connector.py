@@ -129,17 +129,30 @@ class Connector(BaseConnector):
             self.active_config['max_age'] = config['max_age']
         self.interval._set_value(timedelta(seconds=self.active_config['interval']))  # pylint: disable=protected-access
 
+        if 'brand' in config:
+            if config['brand'] not in ['seat', 'cupra']:
+                raise ValueError('Brand must be either "seat" or "cupra"')
+            self.active_config['brand'] = config['brand']
+        else:
+            self.active_config['brand'] = 'cupra'
+
         if self.active_config['username'] is None or self.active_config['password'] is None:
             raise AuthenticationError('Username or password not provided')
 
+        if self.active_config['brand'] == 'cupra':
+            service = Service.MY_CUPRA
+        elif self.active_config['brand'] == 'seat':
+            service = Service.MY_SEAT
+        else:
+            raise ValueError('Brand must be either "seat" or "cupra"')
         self._manager: SessionManager = SessionManager(tokenstore=car_connectivity.get_tokenstore(), cache=car_connectivity.get_cache())
-        session: requests.Session = self._manager.get_session(Service.MY_CUPRA, SessionUser(username=self.active_config['username'],
-                                                                                            password=self.active_config['password']))
+        session: requests.Session = self._manager.get_session(service, SessionUser(username=self.active_config['username'],
+                                                                                   password=self.active_config['password']))
         if not isinstance(session, MyCupraSession):
             raise AuthenticationError('Could not create session')
         self.session: MyCupraSession = session
         self.session.retries = 3
-        self.session.timeout = 180
+        self.session.timeout = 30
         self.session.refresh()
 
         self._elapsed: List[timedelta] = []

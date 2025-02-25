@@ -122,7 +122,8 @@ class VWWebSession(OpenIDSession):
 
             if 'Location' not in response.headers:
                 if 'consent' in url:
-                    raise AuthenticationError('Could not find Location in headers, probably due to missing consent. Try visiting: ' + url)
+                    raise AuthenticationError('Could not find Location in headers, probably due to missing consent. '
+                                              'Check that you configured the correct brand or try visiting: ' + url)
                 raise APICompatibilityError('Forwarding without Location in headers')
 
             url = response.headers['Location']

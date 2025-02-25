@@ -24,6 +24,7 @@ In your carconnectivity.json configuration add a section for the seatcupra conne
             {
                 "type": "seatcupra",
                 "config": {
+                    "brand": "cupra",
                     "username": "test@test.de",
                     "password": "testpassword123"
                 }
@@ -32,6 +33,8 @@ In your carconnectivity.json configuration add a section for the seatcupra conne
     }
 }
 ```
+`brand` (`seat` or `cupra`) defines what login is used. MyCupra or MySeat account. Your credentials will work with both, but you may need to consent again to the terms and conditions when you use the "wrong" brand.
+
 ### Credentials
 If you do not want to provide your username or password inside the configuration you have to create a ".netrc" file at the appropriate location (usually this is your home folder):
 ```
