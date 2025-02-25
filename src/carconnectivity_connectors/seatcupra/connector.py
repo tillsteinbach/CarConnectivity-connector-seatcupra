@@ -252,8 +252,8 @@ class Connector(BaseConnector):
         Updates the status of all vehicles in the garage managed by this connector.
 
         This method iterates through all vehicle VINs in the garage, and for each vehicle that is
-        managed by this connector and is an instance of SkodaVehicle, it updates the vehicle's status
-        by fetching data from various APIs. If the vehicle is an instance of SkodaElectricVehicle,
+        managed by this connector and is an instance of Seat/CupraVehicle, it updates the vehicle's status
+        by fetching data from various APIs. If the vehicle is an instance of Seat/CupraElectricVehicle,
         it also fetches charging information.
 
         Returns:
@@ -277,8 +277,8 @@ class Connector(BaseConnector):
 
     def fetch_vehicles(self) -> None:
         """
-        Fetches the list of vehicles from the Skoda Connect API and updates the garage with new vehicles.
-        This method sends a request to the Skoda Connect API to retrieve the list of vehicles associated with the user's account.
+        Fetches the list of vehicles from the Seat/Cupra Connect API and updates the garage with new vehicles.
+        This method sends a request to the Seat/Cupra Connect API to retrieve the list of vehicles associated with the user's account.
         If new vehicles are found in the response, they are added to the garage.
 
         Returns:
@@ -688,10 +688,10 @@ class Connector(BaseConnector):
         Fetches the position of the given vehicle and updates its position attributes.
 
         Args:
-            vehicle (SkodaVehicle): The vehicle object containing the VIN and position attributes.
+            vehicle (Seat/CupraVehicle): The vehicle object containing the VIN and position attributes.
 
         Returns:
-            SkodaVehicle: The updated vehicle object with the fetched position data.
+            Seat/CupraVehicle: The updated vehicle object with the fetched position data.
 
         Raises:
             APIError: If the VIN is missing.
@@ -728,10 +728,10 @@ class Connector(BaseConnector):
         Fetches the mileage of the given vehicle and updates its mileage attributes.
 
         Args:
-            vehicle (SkodaVehicle): The vehicle object containing the VIN and mileage attributes.
+            vehicle (Seat/CupraVehicle): The vehicle object containing the VIN and mileage attributes.
 
         Returns:
-            SkodaVehicle: The updated vehicle object with the fetched mileage data.
+            Seat/CupraVehicle: The updated vehicle object with the fetched mileage data.
 
         Raises:
             APIError: If the VIN is missing.
@@ -793,10 +793,10 @@ class Connector(BaseConnector):
         Fetches the mileage of the given vehicle and updates its mileage attributes.
 
         Args:
-            vehicle (SkodaVehicle): The vehicle object containing the VIN and mileage attributes.
+            vehicle (Seat/CupraVehicle): The vehicle object containing the VIN and mileage attributes.
 
         Returns:
-            SkodaVehicle: The updated vehicle object with the fetched mileage data.
+            Seat/CupraVehicle: The updated vehicle object with the fetched mileage data.
 
         Raises:
             APIError: If the VIN is missing.
@@ -876,10 +876,10 @@ class Connector(BaseConnector):
         Fetches the mileage of the given vehicle and updates its mileage attributes.
 
         Args:
-            vehicle (SkodaVehicle): The vehicle object containing the VIN and mileage attributes.
+            vehicle (Seat/CupraVehicle): The vehicle object containing the VIN and mileage attributes.
 
         Returns:
-            SkodaVehicle: The updated vehicle object with the fetched mileage data.
+            Seat/CupraVehicle: The updated vehicle object with the fetched mileage data.
 
         Raises:
             APIError: If the VIN is missing.
@@ -1074,7 +1074,7 @@ class Connector(BaseConnector):
                     raise RetrievalError(f'Could not fetch data. Status Code was: {status_response.status_code}')
             except requests.exceptions.ConnectionError as connection_error:
                 raise RetrievalError(f'Connection error: {connection_error}.'
-                                     ' If this happens frequently, please check if other applications communicate with the Skoda server.') from connection_error
+                                     ' If this happens frequently, please check if other applications communicate with the Seat/Cupra server.') from connection_error
             except requests.exceptions.ChunkedEncodingError as chunked_encoding_error:
                 raise RetrievalError(f'Error: {chunked_encoding_error}') from chunked_encoding_error
             except requests.exceptions.ReadTimeout as timeout_error:
@@ -1126,7 +1126,7 @@ class Connector(BaseConnector):
                 raise CommandError(f'Could not start/stop charging ({command_response.status_code}: {command_response.text})')
         except requests.exceptions.ConnectionError as connection_error:
             raise CommandError(f'Connection error: {connection_error}.'
-                               ' If this happens frequently, please check if other applications communicate with the Skoda server.') from connection_error
+                               ' If this happens frequently, please check if other applications communicate with the Seat/Cupra server.') from connection_error
         except requests.exceptions.ChunkedEncodingError as chunked_encoding_error:
             raise CommandError(f'Error: {chunked_encoding_error}') from chunked_encoding_error
         except requests.exceptions.ReadTimeout as timeout_error:
@@ -1185,7 +1185,7 @@ class Connector(BaseConnector):
                 raise CommandError(f'Could not start/stop air conditioning ({command_response.status_code}: {command_response.text})')
         except requests.exceptions.ConnectionError as connection_error:
             raise CommandError(f'Connection error: {connection_error}.'
-                               ' If this happens frequently, please check if other applications communicate with the Skoda server.') from connection_error
+                               ' If this happens frequently, please check if other applications communicate with the Seat/Cupra server.') from connection_error
         except requests.exceptions.ChunkedEncodingError as chunked_encoding_error:
             raise CommandError(f'Error: {chunked_encoding_error}') from chunked_encoding_error
         except requests.exceptions.ReadTimeout as timeout_error:
@@ -1194,6 +1194,24 @@ class Connector(BaseConnector):
             raise CommandError(f'Retrying failed: {retry_error}') from retry_error
         return command_arguments
 
+    def __fetchSecurityToken(self, spin: str) -> str:
+        """
+        Fetches the security token from the server.
+
+        Returns:
+            str: The security token.
+        """
+        command_dict = {'spin': spin}
+        url = f'https://ola.prod.code.seat.cloud.vwgroup.com/v2/users/{self.session.user_id}/spin/verify'
+        spin_verify_response: requests.Response = self.session.post(url, data=json.dumps(command_dict), allow_redirects=True)
+        if spin_verify_response.status_code != requests.codes['ok']:
+            raise AuthenticationError(f'Could not fetch security token ({spin_verify_response.status_code}: {spin_verify_response.text})')
+        data = spin_verify_response.json()
+        if 'securityToken' in data:
+            return data['securityToken']
+        raise AuthenticationError('Could not fetch security token')
+
+    
     def __on_spin(self, spin_command: SpinCommand, command_arguments: Union[str, Dict[str, Any]]) \
             -> Union[str, Dict[str, Any]]:
         del spin_command
@@ -1223,7 +1241,7 @@ class Connector(BaseConnector):
                 LOG.info('Spin verify command executed successfully')
         except requests.exceptions.ConnectionError as connection_error:
             raise CommandError(f'Connection error: {connection_error}.'
-                               ' If this happens frequently, please check if other applications communicate with the Skoda server.') from connection_error
+                               ' If this happens frequently, please check if other applications communicate with the Seat/Cupra server.') from connection_error
         except requests.exceptions.ChunkedEncodingError as chunked_encoding_error:
             raise CommandError(f'Error: {chunked_encoding_error}') from chunked_encoding_error
         except requests.exceptions.ReadTimeout as timeout_error:
@@ -1255,7 +1273,7 @@ class Connector(BaseConnector):
                     raise CommandError(f'Could not execute wake command ({command_response.status_code}: {command_response.text})')
             except requests.exceptions.ConnectionError as connection_error:
                 raise CommandError(f'Connection error: {connection_error}.'
-                                   ' If this happens frequently, please check if other applications communicate with the Skoda server.') from connection_error
+                                   ' If this happens frequently, please check if other applications communicate with the Seat/Cupra server.') from connection_error
             except requests.exceptions.ChunkedEncodingError as chunked_encoding_error:
                 raise CommandError(f'Error: {chunked_encoding_error}') from chunked_encoding_error
             except requests.exceptions.ReadTimeout as timeout_error:
@@ -1304,7 +1322,7 @@ class Connector(BaseConnector):
                     raise CommandError(f'Could not execute honk or flash command ({command_response.status_code}: {command_response.text})')
             except requests.exceptions.ConnectionError as connection_error:
                 raise CommandError(f'Connection error: {connection_error}.'
-                                   ' If this happens frequently, please check if other applications communicate with the Skoda server.') from connection_error
+                                   ' If this happens frequently, please check if other applications communicate with the Seat/Cupra server.') from connection_error
             except requests.exceptions.ChunkedEncodingError as chunked_encoding_error:
                 raise CommandError(f'Error: {chunked_encoding_error}') from chunked_encoding_error
             except requests.exceptions.ReadTimeout as timeout_error:
@@ -1330,11 +1348,12 @@ class Connector(BaseConnector):
             raise CommandError('Command argument missing')
         command_dict = {}
         if 'spin' in command_arguments:
-            command_dict['spin'] = command_arguments['spin']
+            spin = command_arguments['spin']
         else:
             if self.active_config['spin'] is None:
                 raise CommandError('S-PIN is missing, please add S-PIN to your configuration or .netrc file')
-            command_dict['spin'] = self.active_config['spin']
+            spin = self.active_config['spin']
+        sec_token = self.__fetchSecurityToken(spin)
         if command_arguments['command'] == LockUnlockCommand.Command.LOCK:
             url = f'https://ola.prod.code.seat.cloud.vwgroup.com/v1/vehicles/{vin}/access/lock'
         elif command_arguments['command'] == LockUnlockCommand.Command.UNLOCK:
@@ -1342,19 +1361,23 @@ class Connector(BaseConnector):
         else:
             raise CommandError(f'Unknown command {command_arguments["command"]}')
         try:
-            command_response: requests.Response = self.session.post(url, data=json.dumps(command_dict), allow_redirects=True)
+            headers = self.session.headers.copy()
+            headers['SecToken'] = sec_token
+            command_response: requests.Response = self.session.post(url, data=json.dumps(command_dict), allow_redirects=True, headers=headers)
             if command_response.status_code != requests.codes['ok']:
                 LOG.error('Could not execute locking command (%s: %s)', command_response.status_code, command_response.text)
                 raise CommandError(f'Could not execute locking command ({command_response.status_code}: {command_response.text})')
         except requests.exceptions.ConnectionError as connection_error:
             raise CommandError(f'Connection error: {connection_error}.'
-                                ' If this happens frequently, please check if other applications communicate with the Skoda server.') from connection_error
+                               ' If this happens frequently, please check if other applications communicate with the Seat/Cupra server.') from connection_error
         except requests.exceptions.ChunkedEncodingError as chunked_encoding_error:
             raise CommandError(f'Error: {chunked_encoding_error}') from chunked_encoding_error
         except requests.exceptions.ReadTimeout as timeout_error:
             raise CommandError(f'Timeout during read: {timeout_error}') from timeout_error
         except requests.exceptions.RetryError as retry_error:
             raise CommandError(f'Retrying failed: {retry_error}') from retry_error
+        except AuthenticationError as auth_error:
+            raise CommandError(f'Authentication error: {auth_error}') from auth_error
         return command_arguments
 
     def __on_air_conditioning_settings_change(self, attribute: GenericAttribute, value: Any) -> Any:
@@ -1397,7 +1420,7 @@ class Connector(BaseConnector):
                 raise SetterError(f'Could not set value ({settings_response.status_code}): {settings_response.text}')
         except requests.exceptions.ConnectionError as connection_error:
             raise SetterError(f'Connection error: {connection_error}.'
-                              ' If this happens frequently, please check if other applications communicate with the Skoda server.') from connection_error
+                              ' If this happens frequently, please check if other applications communicate with the Seat/Cupra server.') from connection_error
         except requests.exceptions.ChunkedEncodingError as chunked_encoding_error:
             raise SetterError(f'Error: {chunked_encoding_error}') from chunked_encoding_error
         except requests.exceptions.ReadTimeout as timeout_error:
