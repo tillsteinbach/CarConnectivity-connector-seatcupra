@@ -535,6 +535,10 @@ class Connector(BaseConnector):
                 else:
                     vehicle.doors.open_state._set_value(Doors.OpenState.OPEN, measured=captured_at)  # pylint: disable=protected-access
             seen_window_ids: set[str] = set()
+            if 'sunRoof' in vehicle_status_data and vehicle_status_data['sunRoof'] is not None \
+                    and 'windows' in vehicle_status_data and vehicle_status_data['windows'] is not None:
+                vehicle_status_data['windows']['sunRoof'] = vehicle_status_data['sunRoof']
+
             if 'windows' in vehicle_status_data and vehicle_status_data['windows'] is not None:
                 all_windows_closed = True
                 for window_id, window_status in vehicle_status_data['windows'].items():
@@ -561,7 +565,7 @@ class Connector(BaseConnector):
             for window_id in vehicle.windows.windows.keys() - seen_window_ids:
                 vehicle.windows.windows[window_id].enabled = False
             log_extra_keys(LOG_API, f'/api/v2/vehicle-status/{vin}', vehicle_status_data, {'updatedAt', 'locked', 'lights', 'hood', 'trunk', 'doors',
-                                                                                           'windows'})
+                                                                                           'windows', 'sunRoof'})
         return vehicle
 
     def fetch_vehicle_mycar_status(self, vehicle: SeatCupraVehicle, no_cache: bool = False) -> SeatCupraVehicle:
@@ -1005,7 +1009,7 @@ class Connector(BaseConnector):
                     if img is None or self.active_config['max_age'] is None \
                             or (cache_date is not None and cache_date < (datetime.utcnow() - timedelta(seconds=self.active_config['max_age']))):
                         try:
-                            image_download_response = requests.get(image_url, stream=True, timeout=180)
+                            image_download_response = requests.get(image_url, stream=True, timeout=10)
                             if image_download_response.status_code == requests.codes['ok']:
                                 img = Image.open(image_download_response.raw)  # pyright: ignore[reportPossiblyUnboundVariable]
                                 if self.session.cache is not None:
