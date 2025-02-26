@@ -47,7 +47,6 @@ class SeatCupraVehicle(GenericVehicle):  # pylint: disable=too-many-instance-att
                 self._car_images: Dict[str, Image.Image] = {}
 
 
-
 class SeatCupraElectricVehicle(ElectricVehicle, SeatCupraVehicle):
     """
     Represents a Seat/Cupra electric vehicle.

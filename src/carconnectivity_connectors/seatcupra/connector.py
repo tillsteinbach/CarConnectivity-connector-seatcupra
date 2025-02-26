@@ -937,8 +937,11 @@ class Connector(BaseConnector):
                             plug_power_state: ChargingConnector.ExternalPower = \
                                 ChargingConnector.ExternalPower(data['plug']['externalPower'])
                         else:
-                            LOG_API.info('Unknown plug power state %s', data['plug']['externalPower'])
-                            plug_power_state = ChargingConnector.ExternalPower.UNKNOWN
+                            if data['plug']['externalPower'] == 'ready':
+                                plug_power_state = ChargingConnector.ExternalPower.AVAILABLE
+                            else:
+                                LOG_API.info('Unknown plug power state %s', data['plug']['externalPower'])
+                                plug_power_state = ChargingConnector.ExternalPower.UNKNOWN
                         vehicle.charging.connector.external_power._set_value(value=plug_power_state)  # pylint: disable=protected-access
                     else:
                         vehicle.charging.connector.external_power._set_value(None)  # pylint: disable=protected-access
