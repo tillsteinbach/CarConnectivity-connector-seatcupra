@@ -6,6 +6,7 @@ import threading
 
 import json
 import os
+import traceback
 import logging
 import netrc
 from datetime import datetime, timezone, timedelta
@@ -83,6 +84,7 @@ class Connector(BaseConnector):
             if value is not None and value < timedelta(seconds=180):
                 raise ValueError('Intervall must be at least 180 seconds')
             return value
+        self._healthy = False
 
         self.interval._is_changeable = True  # pylint: disable=protected-access
         self.interval._add_on_set_hook(__check_interval)  # pylint: disable=protected-access
@@ -171,6 +173,7 @@ class Connector(BaseConnector):
         self._background_thread = threading.Thread(target=self._background_loop, daemon=False)
         self._background_thread.name = 'carconnectivity.connectors.seatcupra-background'
         self._background_thread.start()
+        self._healthy = True
 
     def _background_loop(self) -> None:
         self._stop_event.clear()
@@ -206,6 +209,10 @@ class Connector(BaseConnector):
             except TemporaryAuthenticationError as err:
                 LOG.error('Temporary authentification error during update (%s). Will try again after configured interval of %ss', str(err), interval)
                 self._stop_event.wait(interval)
+            except Exception as err:
+                LOG.critical('Critical error during update: %s', traceback.format_exc())
+                self._healthy = False
+                raise err
             else:
                 self._stop_event.wait(interval)
 
@@ -1442,3 +1449,6 @@ class Connector(BaseConnector):
 
     def get_type(self) -> str:
         return "carconnectivity-connector-seatcupra"
+
+    def is_healthy(self) -> bool:
+        return self._healthy and super().is_healthy()
