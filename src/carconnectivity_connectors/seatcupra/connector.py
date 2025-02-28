@@ -868,6 +868,9 @@ class Connector(BaseConnector):
                 vehicle.climatization.settings.target_temperature._set_value(value=target_temperature,  # pylint: disable=protected-access
                                                                              measured=captured_at,
                                                                              unit=Temperature.C)
+                vehicle.climatization.settings.target_temperature.precision = 0.5
+                vehicle.climatization.settings.target_temperature.minimum = 16.0
+                vehicle.climatization.settings.target_temperature.maximum = 29.5
             elif 'targetTemperatureInFahrenheit' in data and data['targetTemperatureInFahrenheit'] is not None:
                 # pylint: disable-next=protected-access
                 vehicle.climatization.settings.target_temperature._add_on_set_hook(self.__on_air_conditioning_settings_change)
@@ -877,6 +880,9 @@ class Connector(BaseConnector):
                 vehicle.climatization.settings.target_temperature._set_value(value=target_temperature,  # pylint: disable=protected-access
                                                                              measured=captured_at,
                                                                              unit=Temperature.F)
+                vehicle.climatization.settings.target_temperature.precision = 0.5
+                vehicle.climatization.settings.target_temperature.minimum = 61.0
+                vehicle.climatization.settings.target_temperature.maximum = 85.5
             else:
                 vehicle.climatization.settings.target_temperature._set_value(None)  # pylint: disable=protected-access
             if 'climatisationWithoutExternalPower' in data and data['climatisationWithoutExternalPower'] is not None:
@@ -1169,12 +1175,15 @@ class Connector(BaseConnector):
             url = f'https://ola.prod.code.seat.cloud.vwgroup.com/v2/vehicles/{vin}/climatisation/start'
             if vehicle.climatization.settings is None:
                 raise CommandError('Could not control climatisation, there are no climatisation settings for the vehicle available.')
+            precision: float = 0.5
             if 'target_temperature' in command_arguments:
                 # Round target temperature to nearest 0.5
-                command_dict['targetTemperature'] = round(command_arguments['target_temperature'] * 2) / 2
+                command_dict['targetTemperature'] = round(command_arguments['target_temperature'] / precision) * precision
             elif vehicle.climatization.settings.target_temperature is not None and vehicle.climatization.settings.target_temperature.enabled \
                     and vehicle.climatization.settings.target_temperature.value is not None:
                 temperature_value = vehicle.climatization.settings.target_temperature.value
+                if vehicle.climatization.settings.target_temperature.precision is not None:
+                    precision = vehicle.climatization.settings.target_temperature.precision
                 if vehicle.climatization.settings.target_temperature.unit == Temperature.C:
                     command_dict['targetTemperatureUnit'] = 'celsius'
                 elif vehicle.climatization.settings.target_temperature.unit == Temperature.F:
@@ -1182,7 +1191,7 @@ class Connector(BaseConnector):
                 else:
                     command_dict['targetTemperatureUnit'] = 'celsius'
                 if temperature_value is not None:
-                    command_dict['targetTemperature'] = round(temperature_value * 2) / 2
+                    command_dict['targetTemperature'] = round(temperature_value / precision) * precision
             if 'target_temperature_unit' in command_arguments:
                 if command_arguments['target_temperature_unit'] == Temperature.C:
                     command_dict['targetTemperatureUnit'] = 'celsius'
