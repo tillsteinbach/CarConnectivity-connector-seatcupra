@@ -461,10 +461,10 @@ class Connector(BaseConnector):
                 else:
                     vehicle.connection_state._set_value(GenericVehicle.ConnectionState.UNKNOWN)  # pylint: disable=protected-access
                     LOG_API.info('Unknown connection state %s', vehicle_connection_data['connection']['mode'])
-                log_extra_keys(LOG_API, f'/api/v2/vehicles/{vin}/connection', vehicle_connection_data, {'connection'})
                 log_extra_keys(LOG_API, f'/api/v2/vehicles/{vin}/connection', vehicle_connection_data['connection'], {'mode'})
             else:
                 vehicle.connection_state._set_value(None)  # pylint: disable=protected-access
+            log_extra_keys(LOG_API, f'/api/v2/vehicles/{vin}/connection', vehicle_connection_data, {'connection'})
         else:
             vehicle.connection_state._set_value(None)  # pylint: disable=protected-access
 
@@ -910,12 +910,12 @@ class Connector(BaseConnector):
             if data is not None:
                 if 'charging' in data and data['charging'] is not None:
                     if 'state' in data['charging'] and data['charging']['state'] is not None:
-                        if data['charging']['state'] in SeatCupraCharging.SeatCupraChargingState:
+                        if data['charging']['state'] in [item.value for item in SeatCupraCharging.SeatCupraChargingState]:
                             volkswagen_charging_state = SeatCupraCharging.SeatCupraChargingState(data['charging']['state'])
                             charging_state: Charging.ChargingState = mapping_seatcupra_charging_state[volkswagen_charging_state]
                         else:
                             LOG_API.info('Unkown charging state %s not in %s', data['charging']['state'],
-                                        str(SeatCupraCharging.SeatCupraChargingState))
+                                         str(SeatCupraCharging.SeatCupraChargingState))
                             charging_state = Charging.ChargingState.UNKNOWN
                         vehicle.charging.state._set_value(value=charging_state)  # pylint: disable=protected-access
                     else:
