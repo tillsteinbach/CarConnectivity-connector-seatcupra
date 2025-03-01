@@ -842,7 +842,7 @@ class Connector(BaseConnector):
                     vehicle.climatization.state._set_value(value=climatization_state, measured=captured_at)  # pylint: disable=protected-access
                 else:
                     vehicle.climatization.state._set_value(None)  # pylint: disable=protected-access
-                log_extra_keys(LOG_API, 'climatisation', data, {'carCapturedTimestamp', 'climatisationState'})
+                log_extra_keys(LOG_API, 'climatisationStatus', data['climatisationStatus'], {'carCapturedTimestamp', 'climatisationState'})
             else:
                 vehicle.climatization.state._set_value(None)  # pylint: disable=protected-access
             log_extra_keys(LOG_API, 'climatisation', data, {'climatisationStatus'})
