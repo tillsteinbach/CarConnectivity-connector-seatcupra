@@ -720,7 +720,7 @@ class Connector(BaseConnector):
         if vehicle.position is None:
             raise ValueError('Vehicle has no position object')
         url = f'https://ola.prod.code.seat.cloud.vwgroup.com/v1/vehicles/{vin}/parkingposition'
-        data: Dict[str, Any] | None = self._fetch_data(url=url, session=self.session, no_cache=no_cache)
+        data: Dict[str, Any] | None = self._fetch_data(url=url, session=self.session, no_cache=no_cache, allow_empty=True)
         if data is not None:
             if 'lat' in data and data['lat'] is not None:
                 latitude: Optional[float] = data['lat']
@@ -1082,6 +1082,8 @@ class Connector(BaseConnector):
                     data = status_response.json()
                     if session.cache is not None:
                         session.cache[url] = (data, str(datetime.utcnow()))
+                elif status_response.status_code == requests.codes['no_content'] and allow_empty:
+                    data = None
                 elif status_response.status_code == requests.codes['too_many_requests']:
                     raise TooManyRequestsError('Could not fetch data due to too many requests from your account. '
                                                f'Status Code was: {status_response.status_code}')
