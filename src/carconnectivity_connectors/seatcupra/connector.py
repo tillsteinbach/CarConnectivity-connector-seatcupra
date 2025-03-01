@@ -78,16 +78,10 @@ class Connector(BaseConnector):
 
         self.connected: BooleanAttribute = BooleanAttribute(name="connected", parent=self, tags={'connector_custom'})
         self.interval: DurationAttribute = DurationAttribute(name="interval", parent=self, tags={'connector_custom'})
-
-        def __check_interval(attribute: GenericAttribute, value: Any) -> Any:
-            del attribute
-            if value is not None and value < timedelta(seconds=180):
-                raise ValueError('Intervall must be at least 180 seconds')
-            return value
-        self._healthy = False
-
+        self.interval.minimum = timedelta(seconds=180)
         self.interval._is_changeable = True  # pylint: disable=protected-access
-        self.interval._add_on_set_hook(__check_interval)  # pylint: disable=protected-access
+
+        self._healthy = False
 
         self.commands: Commands = Commands(parent=self)
 
@@ -292,6 +286,7 @@ class Connector(BaseConnector):
                     vehicle_to_update = self.fetch_parking_position(vehicle_to_update)
                 if vehicle_to_update.capabilities.has_capability('vehicleHealthInspection'):
                     vehicle_to_update = self.fetch_maintenance(vehicle_to_update)
+        self.car_connectivity.transaction_end()
 
     def fetch_vehicles(self) -> None:
         """

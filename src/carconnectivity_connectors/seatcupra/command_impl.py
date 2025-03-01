@@ -31,6 +31,8 @@ class SpinCommand(GenericCommand):
 
     @value.setter
     def value(self, new_value: Optional[Union[str, Dict]]) -> None:
+        # Execute early hooks before parsing the value
+        new_value = self._execute_on_set_hook(new_value, early_hook=True)
         if isinstance(new_value, str):
             parser = ThrowingArgumentParser(prog='', add_help=False, exit_on_error=False)
             parser.add_argument('command', help='Command to execute', type=SpinCommand.Command,
@@ -55,8 +57,8 @@ class SpinCommand(GenericCommand):
                     raise ValueError('Invalid value for SpinCommand. '
                                      f'Command must be one of {SpinCommand.Command}')
         if self._is_changeable:
-            for hook in self._on_set_hooks:
-                new_value = hook(self, new_value)
+            # Execute late hooks before setting the value
+            new_value = self._execute_on_set_hook(new_value, early_hook=False)
             self._set_value(new_value)
         else:
             raise TypeError('You cannot set this attribute. Attribute is not mutable.')
