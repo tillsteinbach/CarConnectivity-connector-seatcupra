@@ -22,7 +22,7 @@ from carconnectivity.windows import Windows
 from carconnectivity.lights import Lights
 from carconnectivity.drive import GenericDrive, ElectricDrive, CombustionDrive
 from carconnectivity.vehicle import GenericVehicle, ElectricVehicle
-from carconnectivity.attributes import BooleanAttribute, DurationAttribute, GenericAttribute, TemperatureAttribute
+from carconnectivity.attributes import BooleanAttribute, DurationAttribute, GenericAttribute, TemperatureAttribute, EnumAttribute
 from carconnectivity.units import Temperature
 from carconnectivity.command_impl import ClimatizationStartStopCommand, WakeSleepCommand, HonkAndFlashCommand, LockUnlockCommand, ChargingStartStopCommand
 from carconnectivity.climatization import Climatization
@@ -30,6 +30,7 @@ from carconnectivity.commands import Commands
 from carconnectivity.charging import Charging
 from carconnectivity.charging_connector import ChargingConnector
 from carconnectivity.position import Position
+from carconnectivity.enums import ConnectionState
 
 from carconnectivity_connectors.base.connector import BaseConnector
 from carconnectivity_connectors.seatcupra.auth.session_manager import SessionManager, SessionUser, Service
@@ -76,12 +77,11 @@ class Connector(BaseConnector):
         self._background_thread: Optional[threading.Thread] = None
         self._stop_event = threading.Event()
 
-        self.connected: BooleanAttribute = BooleanAttribute(name="connected", parent=self, tags={'connector_custom'})
+        self.connection_state: EnumAttribute = EnumAttribute(name="connection_state", parent=self, value_type=ConnectionState,
+                                                             value=ConnectionState.DISCONNECTED, tags={'connector_custom'})
         self.interval: DurationAttribute = DurationAttribute(name="interval", parent=self, tags={'connector_custom'})
         self.interval.minimum = timedelta(seconds=180)
         self.interval._is_changeable = True  # pylint: disable=protected-access
-
-        self._healthy = False
 
         self.commands: Commands = Commands(parent=self)
 
@@ -167,11 +167,12 @@ class Connector(BaseConnector):
         self._background_thread = threading.Thread(target=self._background_loop, daemon=False)
         self._background_thread.name = 'carconnectivity.connectors.seatcupra-background'
         self._background_thread.start()
-        self._healthy = True
+        self.healthy._set_value(value=True)  # pylint: disable=protected-access
 
     def _background_loop(self) -> None:
         self._stop_event.clear()
         fetch: bool = True
+        self.connection_state._set_value(value=ConnectionState.CONNECTING)  # pylint: disable=protected-access
         while not self._stop_event.is_set():
             interval = 300
             try:
@@ -205,7 +206,7 @@ class Connector(BaseConnector):
                 self._stop_event.wait(interval)
             except Exception as err:
                 LOG.critical('Critical error during update: %s', traceback.format_exc())
-                self._healthy = False
+                self.healthy._set_value(value=False)  # pylint: disable=protected-access
                 raise err
             else:
                 self._stop_event.wait(interval)
@@ -1456,5 +1457,5 @@ class Connector(BaseConnector):
     def get_type(self) -> str:
         return "carconnectivity-connector-seatcupra"
 
-    def is_healthy(self) -> bool:
-        return self._healthy and super().is_healthy()
+    def get_name(self) -> str:
+        return "Seat/Cupra Connector"
