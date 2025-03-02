@@ -10,9 +10,6 @@
 [![Donate at PayPal](https://img.shields.io/badge/Donate-PayPal-2997d8)](https://www.paypal.com/donate?hosted_button_id=2BVFF5GJ9SXAJ)
 [![Sponsor at Github](https://img.shields.io/badge/Sponsor-GitHub-28a745)](https://github.com/sponsors/tillsteinbach)
 
-
-## Due to lack of access to a Cupra car the development of this conenctor is currently stuck. If you want to help me with access to your account, please contact me!
-
 [CarConnectivity](https://github.com/tillsteinbach/CarConnectivity) is a python API to connect to various car services. This connector enables the integration of seat and cupra vehicles through the MyCupra API. Look at [CarConnectivity](https://github.com/tillsteinbach/CarConnectivity) for other supported brands.
 
 ## Configuration
