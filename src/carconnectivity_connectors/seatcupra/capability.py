@@ -5,7 +5,7 @@ from typing import TYPE_CHECKING
 from enum import IntEnum
 
 from carconnectivity.objects import GenericObject
-from carconnectivity.attributes import StringAttribute, BooleanAttribute, DateAttribute
+from carconnectivity.attributes import StringAttribute, BooleanAttribute, DateAttribute, GenericAttribute
 
 if TYPE_CHECKING:
     from typing import Dict, Optional, List
@@ -77,7 +77,7 @@ class Capabilities(GenericObject):
         """
         return self.__capabilities.get(capability_id)
 
-    def has_capability(self, capability_id: str) -> bool:
+    def has_capability(self, capability_id: str, check_status_ok=False) -> bool:
         """
         Check if the Capabilities contains a capability with the specified ID.
 
@@ -87,7 +87,14 @@ class Capabilities(GenericObject):
         Returns:
             bool: True if the capability exists, otherwise False.
         """
-        return capability_id in self.__capabilities
+        if check_status_ok:
+            if capability_id in self.__capabilities and self.__capabilities[capability_id].enabled:
+                capability: Capability = self.__capabilities[capability_id]
+                if capability.status.enabled and capability.status.value is not None and len(capability.status.value) > 0:
+                    return False
+                return True
+            return False
+        return capability_id in self.__capabilities and self.__capabilities[capability_id].enabled
 
 
 class Capability(GenericObject):
@@ -105,7 +112,7 @@ class Capability(GenericObject):
         self.capability_id = StringAttribute("id", self, capability_id, tags={'connector_custom'})
         self.expiration_date = DateAttribute("expiration_date", self, tags={'connector_custom'})
         self.editable = BooleanAttribute("editable", self, tags={'connector_custom'})
-        self.statuses: List[Capability.Status] = []
+        self.status = GenericAttribute("status", self, value=[], tags={'connector_custom'})
         self.parameters: Dict[str, bool] = {}
         self.enabled = True
         self.delay_notifications = False

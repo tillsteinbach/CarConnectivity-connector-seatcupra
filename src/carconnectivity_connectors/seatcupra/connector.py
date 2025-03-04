@@ -288,15 +288,31 @@ class Connector(BaseConnector):
                 vehicle_to_update = self.fetch_vehicle_status(vehicle_to_update)
                 vehicle_to_update = self.fetch_vehicle_mycar_status(vehicle_to_update)
                 vehicle_to_update = self.fetch_mileage(vehicle_to_update)
-                if vehicle_to_update.capabilities.has_capability('climatisation'):
+                if vehicle_to_update.capabilities.has_capability('climatisation', check_status_ok=True):
                     vehicle_to_update = self.fetch_climatisation(vehicle_to_update)
-                if vehicle_to_update.capabilities.has_capability('charging'):
+                if vehicle_to_update.capabilities.has_capability('charging', check_status_ok=True):
                     vehicle_to_update = self.fetch_charging(vehicle_to_update)
-                if vehicle_to_update.capabilities.has_capability('parkingPosition'):
+                if vehicle_to_update.capabilities.has_capability('parkingPosition', check_status_ok=True):
                     vehicle_to_update = self.fetch_parking_position(vehicle_to_update)
-                if vehicle_to_update.capabilities.has_capability('vehicleHealthInspection'):
+                if vehicle_to_update.capabilities.has_capability('vehicleHealthInspection', check_status_ok=True):
                     vehicle_to_update = self.fetch_maintenance(vehicle_to_update)
+                vehicle_to_update = self.fetch_connection_status(vehicle_to_update)
+                self.decide_state(vehicle_to_update)
         self.car_connectivity.transaction_end()
+
+    def decide_state(self, vehicle: SeatCupraVehicle) -> None:
+        """
+        Decides the state of the vehicle based on the current data.
+
+        Args:
+            vehicle (SeatCupraVehicle): The SeatCupra vehicle object.
+        """
+        if vehicle is not None:
+            if vehicle.position is not None and vehicle.position.enabled and vehicle.position.position_type is not None \
+                    and vehicle.position.position_type.enabled and vehicle.position.position_type.value == Position.PositionType.PARKING:
+                vehicle.state._set_value(GenericVehicle.State.PARKED)  # pylint: disable=protected-access
+            else:
+                vehicle.state._set_value(None)  # pylint: disable=protected-access
 
     def fetch_vehicles(self) -> None:
         """
@@ -369,6 +385,19 @@ class Connector(BaseConnector):
                                         else:
                                             capability = Capability(capability_id=capability_id, capabilities=vehicle.capabilities)
                                             vehicle.capabilities.add_capability(capability_id, capability)
+                                        if 'status' in capability_dict and capability_dict['status'] is not None:
+                                            statuses = capability_dict['status']
+                                            if isinstance(statuses, list):
+                                                for status in statuses:
+                                                    if status in [item.value for item in Capability.Status]:
+                                                        capability.status.value.append(Capability.Status(status))
+                                                    else:
+                                                        LOG_API.warning('Capability status unkown %s', status)
+                                                        capability.status.value.append(Capability.Status.UNKNOWN)
+                                            else:
+                                                LOG_API.warning('Capability status not a list in %s', statuses)
+                                        else:
+                                            capability.status.value.clear()                                  
                                         if 'expirationDate' in capability_dict and capability_dict['expirationDate'] is not None \
                                                 and capability_dict['expirationDate'] != '':
                                             expiration_date: datetime = robust_time_parse(capability_dict['expirationDate'])
@@ -390,7 +419,7 @@ class Connector(BaseConnector):
                                 for capability_id in vehicle.capabilities.capabilities.keys() - found_capabilities:
                                     vehicle.capabilities.remove_capability(capability_id)
 
-                                if vehicle.capabilities.has_capability('charging'):
+                                if vehicle.capabilities.has_capability('charging', check_status_ok=True):
                                     if not isinstance(vehicle, SeatCupraElectricVehicle):
                                         LOG.debug('Promoting %s to SeatCupraElectricVehicle object for %s', vehicle.__class__.__name__, vin)
                                         vehicle = SeatCupraElectricVehicle(origin=vehicle)
@@ -401,7 +430,7 @@ class Connector(BaseConnector):
                                         charging_start_stop_command.enabled = True
                                         vehicle.charging.commands.add_command(charging_start_stop_command)
 
-                                if vehicle.capabilities.has_capability('climatisation'):
+                                if vehicle.capabilities.has_capability('climatisation', check_status_ok=True):
                                     if vehicle.climatization is not None and vehicle.climatization.commands is not None \
                                             and not vehicle.climatization.commands.contains_command('start-stop'):
                                         climatisation_start_stop_command: ClimatizationStartStopCommand = \
@@ -411,7 +440,7 @@ class Connector(BaseConnector):
                                         climatisation_start_stop_command.enabled = True
                                         vehicle.climatization.commands.add_command(climatisation_start_stop_command)
 
-                                if vehicle.capabilities.has_capability('vehicleWakeUpTrigger'):
+                                if vehicle.capabilities.has_capability('vehicleWakeUpTrigger', check_status_ok=True):
                                     if vehicle.commands is not None and vehicle.commands.commands is not None \
                                             and not vehicle.commands.contains_command('wake-sleep'):
                                         wake_sleep_command = WakeSleepCommand(parent=vehicle.commands)
@@ -420,7 +449,7 @@ class Connector(BaseConnector):
                                         vehicle.commands.add_command(wake_sleep_command)
 
                                 # Add honkAndFlash command if necessary capabilities are available
-                                if vehicle.capabilities.has_capability('honkAndFlash'):
+                                if vehicle.capabilities.has_capability('honkAndFlash', check_status_ok=True):
                                     if vehicle.commands is not None and vehicle.commands.commands is not None \
                                             and not vehicle.commands.contains_command('honk-flash'):
                                         honk_flash_command = HonkAndFlashCommand(parent=vehicle.commands, with_duration=True)
@@ -429,7 +458,7 @@ class Connector(BaseConnector):
                                         vehicle.commands.add_command(honk_flash_command)
 
                                 # Add lock and unlock command
-                                if vehicle.capabilities.has_capability('access'):
+                                if vehicle.capabilities.has_capability('access', check_status_ok=True):
                                     if vehicle.doors is not None and vehicle.doors.commands is not None and vehicle.doors.commands.commands is not None \
                                             and not vehicle.doors.commands.contains_command('lock-unlock'):
                                         lock_unlock_command = LockUnlockCommand(parent=vehicle.doors.commands)
@@ -708,6 +737,43 @@ class Connector(BaseConnector):
                     # we take status, targetTemperatureCelsius, targetTemperatureFahrenheit, from climatization request
                     log_extra_keys(LOG_API, 'climatisation', climatisation_status, {'status', 'targetTemperatureCelsius', 'targetTemperatureFahrenheit',
                                                                                     'remainingTime'})
+        return vehicle
+
+    def fetch_connection_status(self, vehicle: SeatCupraVehicle, no_cache: bool = False) -> SeatCupraVehicle:
+        """
+        Fetches the connection status of the given Seat/Cupra vehicle and updates its connection attributes.
+
+        Args:
+            vehicle (SeatCupraVehicle): The Seat/Cupra vehicle object containing the VIN and connection attributes.
+
+        Returns:
+            SeatCupraVehicle: The updated Seat/Cupra vehicle object with the fetched connection data.
+
+        Raises:
+            APIError: If the VIN is missing.
+            ValueError: If the vehicle has no connection object.
+        """
+        vin = vehicle.vin.value
+        if vin is None:
+            raise APIError('VIN is missing')
+        url = f'https://ola.prod.code.seat.cloud.vwgroup.com/vehicles/{vin}/connection'
+        data: Dict[str, Any] | None = self._fetch_data(url=url, session=self.session, no_cache=no_cache)
+        #  {'connection': {'mode': 'online'}
+        if data is not None:
+            if 'connection' in data and data['connection'] is not None:
+                if 'mode' in data['connection'] and data['connection']['mode'] is not None:
+                    if data['connection']['mode'] in [item.value for item in GenericVehicle.ConnectionState]:
+                        connection_state: GenericVehicle.ConnectionState = GenericVehicle.ConnectionState(data['connection']['mode'])
+                        vehicle.connection_state._set_value(connection_state)  # pylint: disable=protected-access
+                    else:
+                        vehicle.connection_state._set_value(GenericVehicle.ConnectionState.UNKNOWN)  # pylint: disable=protected-access
+                        LOG_API.info('Unknown connection state %s', data['connection']['mode'])
+                else:
+                    vehicle.connection_state._set_value(None)  # pylint: disable=protected-access
+                log_extra_keys(LOG_API, 'connection status', data['connection'],  {'mode'})
+            else:
+                vehicle.connection_state._set_value(None)  # pylint: disable=protected-access
+            log_extra_keys(LOG_API, 'connection status', data,  {'connection'})
         return vehicle
 
     def fetch_parking_position(self, vehicle: SeatCupraVehicle, no_cache: bool = False) -> SeatCupraVehicle:
