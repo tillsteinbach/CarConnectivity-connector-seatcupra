@@ -72,12 +72,15 @@ class MyCupraSession(VWWebSession):
         super(MyCupraSession, self).login()
         # retrieve authorization URL
         authorization_url_str: str = self.authorization_url(url='https://identity.vwgroup.io/oidc/v1/authorize')
-        # perform web authentication
-        response = self.do_web_auth(authorization_url_str)
+        if self.redirect_uri is not None and authorization_url_str.startswith(self.redirect_uri):
+            response = authorization_url_str.replace(self.redirect_uri + '#', 'https://egal?')
+        else:
+            # perform web authentication
+            response = self.do_web_auth(authorization_url_str)
         # fetch tokens from web authentication response
         if self.is_seat:
-            return self.fetch_tokens('https://ola.prod.code.seat.cloud.vwgroup.com/authorization/api/v1/token',
-                                     authorization_response=response)
+            self.fetch_tokens('https://ola.prod.code.seat.cloud.vwgroup.com/authorization/api/v1/token',
+                              authorization_response=response)
         else:
             self.fetch_tokens('https://identity.vwgroup.io/oidc/v1/token',
                               authorization_response=response)
@@ -226,18 +229,27 @@ class MyCupraSession(VWWebSession):
 
         headers['content-type'] = 'application/x-www-form-urlencoded; charset=utf-8'
 
-        # Request new tokens using the refresh token
-        token_response = self.post(
-            token_url,
-            data=body,
-            auth=auth,
-            timeout=timeout,
-            headers=headers,
-            verify=verify,
-            withhold_token=False,  # pyright: ignore reportCallIssue
-            proxies=proxies,
-            access_type=AccessType.NONE  # pyright: ignore reportCallIssue
-        )
+        tries = 0
+        while True:
+            try:
+                # Request new tokens using the refresh token
+                token_response = self.post(
+                    token_url,
+                    data=body,
+                    auth=auth,
+                    timeout=timeout,
+                    headers=headers,
+                    verify=verify,
+                    withhold_token=False,  # pyright: ignore reportCallIssue
+                    proxies=proxies,
+                    access_type=AccessType.NONE  # pyright: ignore reportCallIssue
+                )
+            except requests.exceptions.RequestException as err:
+                tries += 1
+                if tries >= 3:
+                    raise TemporaryAuthenticationError('Token could not be refreshed due to temporary MyCupra failure') from err
+            else:
+                break
         if token_response.status_code == requests.codes['unauthorized']:
             raise AuthenticationError('Refreshing tokens failed: Server requests new authorization')
         elif token_response.status_code in (requests.codes['internal_server_error'], requests.codes['service_unavailable'], requests.codes['gateway_timeout']):
@@ -263,7 +275,7 @@ class MyCupraSession(VWWebSession):
         token=None,
         timeout=None,
         **kwargs
-    ):
+    ) -> requests.Response:
         """Intercept all requests and add userId if present."""
         if not is_secure_transport(url):
             raise InsecureTransportError()

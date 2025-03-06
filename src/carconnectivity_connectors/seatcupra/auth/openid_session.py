@@ -116,7 +116,8 @@ class OpenIDSession(requests.Session):
                                      backoff_factor=0.1,
                                      status_forcelist=[500],
                                      status_blacklist=[429],
-                                     raise_on_status=False)
+                                     raise_on_status=False,
+                                     allowed_methods=None)  # set allowed_methods to None to retry on all methods
             self.mount('https://', HTTPAdapter(max_retries=retries))
 
     @property
