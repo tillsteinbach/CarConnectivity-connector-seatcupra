@@ -46,6 +46,7 @@ class MyCupraSession(VWWebSession):
 
             self.headers = CaseInsensitiveDict({
                 'accept': '*/*',
+                'connection': 'keep-alive',
                 'content-type': 'application/json',
                 'user-agent': 'SEATApp/2.5.0 (com.seat.myseat.ola; build:202410171614; iOS 15.8.3) Alamofire/5.7.0 Mobile',
                 'accept-language': 'de-de',
@@ -62,6 +63,7 @@ class MyCupraSession(VWWebSession):
 
             self.headers = CaseInsensitiveDict({
                 'accept': '*/*',
+                'connection': 'keep-alive',
                 'content-type': 'application/json',
                 'user-agent': 'CUPRAApp%20-%20Store/20220503 CFNetwork/1333.0.4 Darwin/21.5.0',
                 'accept-language': 'de-de',
@@ -220,12 +222,19 @@ class MyCupraSession(VWWebSession):
         if headers is None:
             headers = dict(self.headers)
 
-        body: Dict[str, str] = {
-            'client_id': self.client_id,
-            'client_secret': 'eb8814e641c81a2640ad62eeccec11c98effc9bccd4269ab7af338b50a94b3a2',
-            'grant_type': 'refresh_token',
-            'refresh_token': self.refresh_token
-        }
+        if self.is_seat:
+            body: Dict[str, str] = {
+                'client_id': self.client_id,
+                'grant_type': 'refresh_token',
+                'refresh_token': self.refresh_token
+            }
+        else:
+            body: Dict[str, str] = {
+                'client_id': self.client_id,
+                'client_secret': 'eb8814e641c81a2640ad62eeccec11c98effc9bccd4269ab7af338b50a94b3a2',
+                'grant_type': 'refresh_token',
+                'refresh_token': self.refresh_token
+            }
 
         headers['content-type'] = 'application/x-www-form-urlencoded; charset=utf-8'
 
