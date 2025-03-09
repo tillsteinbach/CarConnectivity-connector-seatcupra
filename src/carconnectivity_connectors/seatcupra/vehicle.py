@@ -3,6 +3,8 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from carconnectivity.vehicle import GenericVehicle, ElectricVehicle, CombustionVehicle, HybridVehicle
+from carconnectivity.attributes import   RangeAttribute
+from carconnectivity.units import Length
 
 from carconnectivity_connectors.seatcupra.capability import Capabilities
 from carconnectivity_connectors.seatcupra.climatization import SeatCupraClimatization
@@ -57,6 +59,9 @@ class SeatCupraElectricVehicle(ElectricVehicle, SeatCupraVehicle):
             super().__init__(origin=origin)
         else:
             super().__init__(vin=vin, garage=garage, managing_connector=managing_connector)
+        
+        # Use here a new class in carconnectivity maby "ranges"    
+        self.rangeElectrical: RangeAttribute = RangeAttribute(name="rangeElectrical", parent=self, value=None, unit=Length.UNKNOWN, minimum=0, tags={'carconnectivity'}) 
 
 
 class SeatCupraCombustionVehicle(CombustionVehicle, SeatCupraVehicle):
@@ -69,6 +74,10 @@ class SeatCupraCombustionVehicle(CombustionVehicle, SeatCupraVehicle):
             super().__init__(origin=origin)
         else:
             super().__init__(vin=vin, garage=garage, managing_connector=managing_connector)
+            
+        # Use here a new class in carconnectivity maby "ranges"   
+        self.rangeDiesel: RangeAttribute = RangeAttribute(name="rangeDiesel", parent=self, value=None, unit=Length.UNKNOWN, minimum=0, tags={'carconnectivity'}) 
+        self.rangeAdBlue: RangeAttribute = RangeAttribute(name="rangeAdBlue", parent=self, value=None, unit=Length.UNKNOWN, minimum=0, tags={'carconnectivity'}) 
 
 
 class SeatCupraHybridVehicle(HybridVehicle, SeatCupraVehicle):

@@ -288,6 +288,7 @@ class Connector(BaseConnector):
                 vehicle_to_update = self.fetch_vehicle_status(vehicle_to_update)
                 vehicle_to_update = self.fetch_vehicle_mycar_status(vehicle_to_update)
                 vehicle_to_update = self.fetch_mileage(vehicle_to_update)
+                vehicle_to_update = self.fetch_ranges(vehicle_to_update)
                 if vehicle_to_update.capabilities.has_capability('climatisation', check_status_ok=True):
                     vehicle_to_update = self.fetch_climatisation(vehicle_to_update)
                 if vehicle_to_update.capabilities.has_capability('charging', check_status_ok=True):
@@ -844,6 +845,28 @@ class Connector(BaseConnector):
         else:
             vehicle.odometer._set_value(None)  # pylint: disable=protected-access
         return vehicle
+    
+    def fetch_ranges(self, vehicle: SeatCupraVehicle, no_cache: bool = False) -> SeatCupraVehicle:
+        vin = vehicle.vin.value
+        if vin is None:
+            raise APIError('VIN is missing')
+        url = f'https://ola.prod.code.seat.cloud.vwgroup.com/v1/vehicles/{vin}/ranges'
+        data: Dict[str, Any] | None = self._fetch_data(url=url, session=self.session, no_cache=no_cache)
+        if data is not None:
+            for item in data['ranges']:
+                if 'dieselRangeKm' in item['rangeName'] and item['rangeName'] is not None:
+                    vehicle.rangeDiesel._set_value(item['value'], unit=Length.KM)                      
+                                   
+                if 'adBlueKm' in item['rangeName'] and item['rangeName'] is not None:
+                    vehicle.rangeAdBlue._set_value(item['value'], unit=Length.KM)  
+                                    
+                if 'electricRangeKm' in item['rangeName'] and item['rangeName'] is not None:
+                    vehicle.rangeElectrical._set_value(item['value'], unit=Length.KM)  
+               
+            log_extra_keys(LOG_API, f'https://ola.prod.code.seat.cloud.vwgroup.com/v1/vehicles/{vin}/ranges', data,  {'ranges'})    
+        else:
+            vehicle.ranges._set_value(None)  # pylint: disable=protected-access
+        return vehicle    
 
     def fetch_maintenance(self, vehicle: SeatCupraVehicle, no_cache: bool = False) -> SeatCupraVehicle:
         vin = vehicle.vin.value
