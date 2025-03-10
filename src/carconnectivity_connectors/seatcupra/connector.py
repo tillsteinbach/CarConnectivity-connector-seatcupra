@@ -20,7 +20,7 @@ from carconnectivity.units import Length, Current
 from carconnectivity.doors import Doors
 from carconnectivity.windows import Windows
 from carconnectivity.lights import Lights
-from carconnectivity.drive import GenericDrive, ElectricDrive, CombustionDrive
+from carconnectivity.drive import GenericDrive, ElectricDrive, CombustionDrive, DieselDrive
 from carconnectivity.vehicle import GenericVehicle, ElectricVehicle
 from carconnectivity.attributes import BooleanAttribute, DurationAttribute, GenericAttribute, TemperatureAttribute, EnumAttribute
 from carconnectivity.units import Temperature
@@ -288,6 +288,7 @@ class Connector(BaseConnector):
                 vehicle_to_update = self.fetch_vehicle_status(vehicle_to_update)
                 vehicle_to_update = self.fetch_vehicle_mycar_status(vehicle_to_update)
                 vehicle_to_update = self.fetch_mileage(vehicle_to_update)
+                vehicle_to_update = self.fetch_ranges(vehicle_to_update)
                 if vehicle_to_update.capabilities.has_capability('climatisation', check_status_ok=True):
                     vehicle_to_update = self.fetch_climatisation(vehicle_to_update)
                 if vehicle_to_update.capabilities.has_capability('charging', check_status_ok=True):
@@ -414,7 +415,7 @@ class Connector(BaseConnector):
                                                 capability.parameters[parameter] = value
                                     else:
                                         raise APIError('Could not fetch capabilities, capability ID missing')
-                                    log_extra_keys(LOG_API, 'capability', capability_dict,  {'id', 'expirationDate', 'editable', 'parameters'})
+                                    log_extra_keys(LOG_API, 'capability', capability_dict,  {'id', 'expirationDate', 'editable', 'parameters', 'status'})
 
                                 for capability_id in vehicle.capabilities.capabilities.keys() - found_capabilities:
                                     vehicle.capabilities.remove_capability(capability_id)
@@ -646,6 +647,8 @@ class Connector(BaseConnector):
                         else:
                             if engine_type == GenericDrive.Type.ELECTRIC:
                                 drive = ElectricDrive(drive_id=drive_id, drives=vehicle.drives)
+                            elif engine_type == GenericDrive.Type.DIESEL:
+                                drive = DieselDrive(drive_id=drive_id, drives=vehicle.drives)
                             elif engine_type in [GenericDrive.Type.FUEL,
                                                  GenericDrive.Type.GASOLINE,
                                                  GenericDrive.Type.PETROL,
@@ -843,6 +846,36 @@ class Connector(BaseConnector):
             log_extra_keys(LOG_API, f'https://ola.prod.code.seat.cloud.vwgroup.com/v1/vehicles/{vin}/mileage', data,  {'mileageKm'})
         else:
             vehicle.odometer._set_value(None)  # pylint: disable=protected-access
+        return vehicle
+
+    def fetch_ranges(self, vehicle: SeatCupraVehicle, no_cache: bool = False) -> SeatCupraVehicle:
+        vin = vehicle.vin.value
+        if vin is None:
+            raise APIError('VIN is missing')
+        url = f'https://ola.prod.code.seat.cloud.vwgroup.com/v1/vehicles/{vin}/ranges'
+        # {'ranges': [{'rangeName': 'gasolineRangeKm', 'value': 100.0}, {'rangeName': 'electricRangeKm', 'value': 28.0}]}
+        data: Dict[str, Any] | None = self._fetch_data(url=url, session=self.session, no_cache=no_cache)
+        if data is not None:
+            if 'ranges' in data and data['ranges'] is not None:
+                for drive in vehicle.drives.drives.values():
+                    if drive.type.enabled and drive.type.value == GenericDrive.Type.ELECTRIC:
+                        for range_dict in data['ranges']:
+                            if 'electricRangeKm' in range_dict and range_dict['electricRangeKm'] is not None:
+                                drive.range._set_value(range_dict['electricRangeKm'], unit=Length.KM)  # pylint: disable=protected-access
+                                break
+                    elif drive.type.enabled and drive.type.value == GenericDrive.Type.GASOLINE:
+                        for range_dict in data['ranges']:
+                            if 'gasolineRangeKm' in range_dict and range_dict['gasolineRangeKm'] is not None:
+                                drive.range._set_value(range_dict['gasolineRangeKm'], unit=Length.KM)  # pylint: disable=protected-access
+                                break
+                    elif drive.type.enabled and drive.type.value == GenericDrive.Type.DIESEL:
+                        for range_dict in data['ranges']:
+                            if 'dieselRangeKm' in range_dict and range_dict['dieselRangeKm'] is not None:
+                                drive.range._set_value(range_dict['dieselRangeKm'], unit=Length.KM)  # pylint: disable=protected-access
+                            elif 'adBlueKm' in range_dict and range_dict['adBlueKm'] is not None:
+                                if isinstance(drive, DieselDrive):
+                                    drive.adblue_range._set_value(range_dict['adBlueKm'], unit=Length.KM)  # pylint: disable=protected-access
+            log_extra_keys(LOG_API, f'https://ola.prod.code.seat.cloud.vwgroup.com/v1/vehicles/{vin}/ranges', data,  {'ranges'})
         return vehicle
 
     def fetch_maintenance(self, vehicle: SeatCupraVehicle, no_cache: bool = False) -> SeatCupraVehicle:
