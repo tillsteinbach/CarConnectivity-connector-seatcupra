@@ -860,21 +860,25 @@ class Connector(BaseConnector):
                 for drive in vehicle.drives.drives.values():
                     if drive.type.enabled and drive.type.value == GenericDrive.Type.ELECTRIC:
                         for range_dict in data['ranges']:
-                            if 'electricRangeKm' in range_dict and range_dict['electricRangeKm'] is not None:
-                                drive.range._set_value(range_dict['electricRangeKm'], unit=Length.KM)  # pylint: disable=protected-access
+                            if 'rangeName' in range_dict and range_dict['rangeName'] is not None and range_dict['rangeName'] == 'electricRangeKm' \
+                                    and 'value' in range_dict and range_dict['value'] is not None:
+                                drive.range._set_value(range_dict['value'], unit=Length.KM)  # pylint: disable=protected-access
                                 break
                     elif drive.type.enabled and drive.type.value == GenericDrive.Type.GASOLINE:
                         for range_dict in data['ranges']:
-                            if 'gasolineRangeKm' in range_dict and range_dict['gasolineRangeKm'] is not None:
-                                drive.range._set_value(range_dict['gasolineRangeKm'], unit=Length.KM)  # pylint: disable=protected-access
+                            if 'rangeName' in range_dict and range_dict['rangeName'] is not None and range_dict['rangeName'] == 'gasolineRangeKm' \
+                                    and 'value' in range_dict and range_dict['value'] is not None:
+                                drive.range._set_value(range_dict['value'], unit=Length.KM)  # pylint: disable=protected-access
                                 break
                     elif drive.type.enabled and drive.type.value == GenericDrive.Type.DIESEL:
                         for range_dict in data['ranges']:
-                            if 'dieselRangeKm' in range_dict and range_dict['dieselRangeKm'] is not None:
-                                drive.range._set_value(range_dict['dieselRangeKm'], unit=Length.KM)  # pylint: disable=protected-access
-                            elif 'adBlueKm' in range_dict and range_dict['adBlueKm'] is not None:
+                            if 'rangeName' in range_dict and range_dict['rangeName'] is not None and range_dict['rangeName'] == 'dieselRangeKm' \
+                                    and 'value' in range_dict and range_dict['value'] is not None:
+                                drive.range._set_value(range_dict['value'], unit=Length.KM)  # pylint: disable=protected-access
+                            elif 'rangeName' in range_dict and range_dict['rangeName'] is not None and range_dict['rangeName'] == 'adBlueKm' \
+                                    and 'value' in range_dict and range_dict['value'] is not None:
                                 if isinstance(drive, DieselDrive):
-                                    drive.adblue_range._set_value(range_dict['adBlueKm'], unit=Length.KM)  # pylint: disable=protected-access
+                                    drive.adblue_range._set_value(range_dict['value'], unit=Length.KM)  # pylint: disable=protected-access
             log_extra_keys(LOG_API, f'https://ola.prod.code.seat.cloud.vwgroup.com/v1/vehicles/{vin}/ranges', data,  {'ranges'})
         return vehicle
 
