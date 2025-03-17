@@ -1582,10 +1582,12 @@ class Connector(BaseConnector):
         if settings.target_temperature.enabled and settings.target_temperature.value is not None:
             # Round target temperature to nearest 0.5
             # Check if the attribute changed is the target_temperature attribute
+            precision: float = settings.target_temperature.precision if settings.target_temperature.precision is not None else 0.5
             if isinstance(attribute, TemperatureAttribute) and attribute.id == 'target_temperature':
-                setting_dict['targetTemperature'] = round(value * 2) / 2
+                value = round(value / settings.target_temperature.precision) * settings.target_temperature.precision
+                setting_dict['targetTemperature'] = value
             else:
-                setting_dict['targetTemperature'] = round(settings.target_temperature.value * 2) / 2
+                setting_dict['targetTemperature'] = round(settings.target_temperature.value / precision) * precision
             if settings.target_temperature.unit == Temperature.C:
                 setting_dict['targetTemperatureUnit'] = 'celsius'
             elif settings.target_temperature.unit == Temperature.F:
