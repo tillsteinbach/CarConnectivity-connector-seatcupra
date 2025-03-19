@@ -6,6 +6,7 @@ from carconnectivity.vehicle import GenericVehicle, ElectricVehicle, CombustionV
 
 from carconnectivity_connectors.seatcupra.capability import Capabilities
 from carconnectivity_connectors.seatcupra.climatization import SeatCupraClimatization
+from carconnectivity_connectors.seatcupra.charging import SeatCupraCharging
 
 SUPPORT_IMAGES = False
 try:
@@ -17,6 +18,8 @@ except ImportError:
 if TYPE_CHECKING:
     from typing import Optional, Dict
     from carconnectivity.garage import Garage
+    from carconnectivity.charging import Charging
+
     from carconnectivity_connectors.base.connector import BaseConnector
 
 
@@ -55,8 +58,13 @@ class SeatCupraElectricVehicle(ElectricVehicle, SeatCupraVehicle):
                  origin: Optional[SeatCupraVehicle] = None) -> None:
         if origin is not None:
             super().__init__(garage=garage, origin=origin)
+            if isinstance(origin, ElectricVehicle):
+                self.charging: Charging = SeatCupraCharging(vehicle=self, origin=origin.charging)
+            else:
+                self.charging: Charging = SeatCupraCharging(vehicle=self, origin=self.charging)
         else:
             super().__init__(vin=vin, garage=garage, managing_connector=managing_connector)
+            self.charging: Charging = SeatCupraCharging(vehicle=self, origin=self.charging)
 
 
 class SeatCupraCombustionVehicle(CombustionVehicle, SeatCupraVehicle):

@@ -12,6 +12,8 @@ from carconnectivity.vehicle import ElectricVehicle
 if TYPE_CHECKING:
     from typing import Optional, Dict
 
+    from carconnectivity.objects import GenericObject
+
 
 class SeatCupraCharging(Charging):  # pylint: disable=too-many-instance-attributes
     """
@@ -22,9 +24,22 @@ class SeatCupraCharging(Charging):  # pylint: disable=too-many-instance-attribut
     """
     def __init__(self, vehicle: ElectricVehicle | None = None, origin: Optional[Charging] = None) -> None:
         if origin is not None:
-            super().__init__(origin=origin)
+            super().__init__(vehicle=vehicle, origin=origin)
+            self.settings = SeatCupraCharging.Settings(parent=self, origin=origin.settings)
         else:
             super().__init__(vehicle=vehicle)
+            self.settings = SeatCupraCharging.Settings(parent=self, origin=self.settings)
+
+    class Settings(Charging.Settings):
+        """
+        This class represents the settings for car volkswagen car charging.
+        """
+        def __init__(self, parent: Optional[GenericObject] = None, origin: Optional[Charging.Settings] = None) -> None:
+            if origin is not None:
+                super().__init__(parent=parent, origin=origin)
+            else:
+                super().__init__(parent=parent)
+            self.max_current_in_ampere: Optional[bool] = None
 
     class SeatCupraChargingState(Enum,):
         """

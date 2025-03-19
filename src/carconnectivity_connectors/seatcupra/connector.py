@@ -22,7 +22,8 @@ from carconnectivity.windows import Windows
 from carconnectivity.lights import Lights
 from carconnectivity.drive import GenericDrive, ElectricDrive, CombustionDrive, DieselDrive
 from carconnectivity.vehicle import GenericVehicle, ElectricVehicle
-from carconnectivity.attributes import BooleanAttribute, DurationAttribute, GenericAttribute, TemperatureAttribute, EnumAttribute
+from carconnectivity.attributes import BooleanAttribute, DurationAttribute, GenericAttribute, TemperatureAttribute, EnumAttribute, CurrentAttribute, \
+    LevelAttribute
 from carconnectivity.units import Temperature
 from carconnectivity.command_impl import ClimatizationStartStopCommand, WakeSleepCommand, HonkAndFlashCommand, LockUnlockCommand, ChargingStartStopCommand, \
     WindowHeatingStartStopCommand
@@ -1132,22 +1133,81 @@ class Connector(BaseConnector):
                 log_extra_keys(LOG_API, f'https://ola.prod.code.seat.cloud.vwgroup.com/v1/vehicles/{vin}/charging/status', data,
                                {'state', 'battery', 'charging', 'plug'})
 
-            url = f'https://ola.prod.code.seat.cloud.vwgroup.com/v1/vehicles/{vin}/charging/settings'
+            url = f'https://ola.prod.code.seat.cloud.vwgroup.com/vehicles/{vin}/charging/settings'
             data: Dict[str, Any] | None = self._fetch_data(url=url, session=self.session, no_cache=no_cache)
             if data is not None:
-                if 'maxChargeCurrentAc' in data and data['maxChargeCurrentAc'] is not None:
-                    if data['maxChargeCurrentAc']:
-                        vehicle.charging.settings.maximum_current._set_value(value=16,  # pylint: disable=protected-access
-                                                                             unit=Current.A)
+                # {'settings': {'maxChargeCurrentAC': 'reduced', 'carCapturedTimestamp': '2025-03-18T16:50:33Z', 'autoUnlockPlugWhenCharged': None, 'targetSoc_pct': 100, 'batteryCareTargetSocPercentage': 80}}
+                if 'settings' in data and data['settings'] is not None:
+                    if 'carCapturedTimestamp' not in data['settings'] or data['settings']['carCapturedTimestamp'] is None:
+                        raise APIError('Could not fetch vehicle status, carCapturedTimestamp missing')
+                    captured_at: datetime = robust_time_parse(data['settings']['carCapturedTimestamp'])
+                    if 'maxChargeCurrentAC_A' in data['settings'] and data['settings']['maxChargeCurrentAC_A'] is not None:
+                        if isinstance(vehicle.charging.settings, SeatCupraCharging.Settings):
+                            vehicle.charging.settings.max_current_in_ampere = True
+                        else:
+                            raise ValueError('Charging settings not of type VolkswagenCharging.Settings')
+                        vehicle.charging.settings.maximum_current.minimum = 6.0
+                        vehicle.charging.settings.maximum_current.maximum = 16.0
+                        vehicle.charging.settings.maximum_current.precision = 1.0
+                        # pylint: disable-next=protected-access
+                        vehicle.charging.settings.maximum_current._add_on_set_hook(self.__on_charging_settings_change)
+                        vehicle.charging.settings.maximum_current._is_changeable = True  # pylint: disable=protected-access
+                        vehicle.charging.settings.maximum_current._set_value(data['settings']['maxChargeCurrentAC_A'],  # pylint: disable=protected-access
+                                                                             measured=captured_at)
+                    elif 'maxChargeCurrentAC' in data['settings'] and data['settings']['maxChargeCurrentAC'] is not None:
+                        if isinstance(vehicle.charging.settings, SeatCupraCharging.Settings):
+                            vehicle.charging.settings.max_current_in_ampere = False
+                        else:
+                            raise ValueError('Charging settings not of type VolkswagenCharging.Settings')
+                        vehicle.charging.settings.maximum_current.minimum = 6.0
+                        vehicle.charging.settings.maximum_current.maximum = 16.0
+                        vehicle.charging.settings.maximum_current.precision = 1.0
+                        # pylint: disable-next=protected-access
+                        vehicle.charging.settings.maximum_current._add_on_set_hook(self.__on_charging_settings_change)
+                        vehicle.charging.settings.maximum_current._is_changeable = True  # pylint: disable=protected-access
+                        if data['settings']['maxChargeCurrentAC'] == 'maximum':
+                            vehicle.charging.settings.maximum_current._set_value(16.0,  # pylint: disable=protected-access
+                                                                                 measured=captured_at)
+                        elif data['settings']['maxChargeCurrentAC'] == 'reduced':
+                            vehicle.charging.settings.maximum_current._set_value(6.0,  # pylint: disable=protected-access
+                                                                                 measured=captured_at)
+                        else:
+                            LOG_API.info('Unknown max charge current %s', data['settings']['maxChargeCurrentAC'])
+                            vehicle.charging.settings.maximum_current._set_value(None, measured=captured_at)  # pylint: disable=protected-access
                     else:
-                        vehicle.charging.settings.maximum_current._set_value(value=6,  # pylint: disable=protected-access
-                                                                             unit=Current.A)
-                else:
-                    vehicle.charging.settings.maximum_current._set_value(None)  # pylint: disable=protected-access
-                if 'defaultMaxTargetSocPercentage' in data and data['defaultMaxTargetSocPercentage'] is not None:
-                    vehicle.charging.settings.target_level._set_value(data['defaultMaxTargetSocPercentage'])  # pylint: disable=protected-access
-                else:
-                    vehicle.charging.settings.target_level._set_value(None)  # pylint: disable=protected-access
+                        vehicle.charging.settings.maximum_current._set_value(None, measured=captured_at)  # pylint: disable=protected-access
+                    if 'autoUnlockPlugWhenCharged' in data['settings'] and data['settings']['autoUnlockPlugWhenCharged'] is not None:
+                        # pylint: disable-next=protected-access
+                        vehicle.charging.settings.auto_unlock._add_on_set_hook(self.__on_charging_settings_change)
+                        vehicle.charging.settings.auto_unlock._is_changeable = True  # pylint: disable=protected-access
+                        if data['settings']['autoUnlockPlugWhenCharged'] == 'on':
+                            vehicle.charging.settings.auto_unlock._set_value(True,  # pylint: disable=protected-access
+                                                                             measured=captured_at)
+                        elif data['settings']['autoUnlockPlugWhenCharged'] == 'off':
+                            vehicle.charging.settings.auto_unlock._set_value(False,  # pylint: disable=protected-access
+                                                                             measured=captured_at)
+                        else:
+                            LOG_API.info('Unknown auto unlock plug when charged %s', data['settings']['autoUnlockPlugWhenCharged'])
+                            vehicle.charging.settings.auto_unlock._set_value(None, measured=captured_at)  # pylint: disable=protected-access
+                    else:
+                        vehicle.charging.settings.auto_unlock._set_value(None, measured=captured_at)  # pylint: disable=protected-access
+                    if 'targetSoc_pct' in data['settings'] and data['settings']['targetSoc_pct'] is not None:
+                        vehicle.charging.settings.target_level.minimum = 50.0
+                        vehicle.charging.settings.target_level.maximum = 100.0
+                        vehicle.charging.settings.target_level.precision = 10.0
+                        # pylint: disable-next=protected-access
+                        vehicle.charging.settings.target_level._add_on_set_hook(self.__on_charging_settings_change)
+                        vehicle.charging.settings.target_level._is_changeable = True  # pylint: disable=protected-access
+                        vehicle.charging.settings.target_level._set_value(data['settings']['targetSoc_pct'],  # pylint: disable=protected-access
+                                                                          measured=captured_at)
+                    else:
+                        vehicle.charging.settings.target_level._set_value(None, measured=captured_at)  # pylint: disable=protected-access
+                    log_extra_keys(LOG_API, 'chargingSettings', data['settings'], {'carCapturedTimestamp', 'maxChargeCurrentAC_A', 'maxChargeCurrentAC',
+                                                                                   'autoUnlockPlugWhenCharged', 'targetSoc_pct'})
+            else:
+                vehicle.charging.settings.maximum_current._set_value(None)  # pylint: disable=protected-access
+                vehicle.charging.settings.auto_unlock._set_value(None)  # pylint: disable=protected-access
+                vehicle.charging.settings.target_level._set_value(None)  # pylint: disable=protected-access
         return vehicle
 
     def fetch_image(self, vehicle: SeatCupraVehicle, no_cache: bool = False) -> SeatCupraVehicle:
@@ -1594,10 +1654,13 @@ class Connector(BaseConnector):
                 setting_dict['targetTemperatureUnit'] = 'farenheit'
             else:
                 setting_dict['targetTemperatureUnit'] = 'celsius'
-        if isinstance(attribute, BooleanAttribute) and attribute.id == 'climatisation_without_external_power':
-            setting_dict['climatisationWithoutExternalPower'] = value
-        elif settings.climatization_without_external_power.enabled and settings.climatization_without_external_power.value is not None:
-            setting_dict['climatisationWithoutExternalPower'] = settings.climatization_without_external_power.value
+        climatization_capability: Optional[Capability] = vehicle.capabilities.get_capability('climatisation')
+        if climatization_capability is not None and ('supportsOffGridClimatisation' not in climatization_capability.parameters
+                                                     or climatization_capability.parameters['supportsOffGridClimatisation'] != 'false'):
+            if isinstance(attribute, BooleanAttribute) and attribute.id == 'climatisation_without_external_power':
+                setting_dict['climatisationWithoutExternalPower'] = value
+            elif settings.climatization_without_external_power.enabled and settings.climatization_without_external_power.value is not None:
+                setting_dict['climatisationWithoutExternalPower'] = settings.climatization_without_external_power.value
 
         url: str = f'https://ola.prod.code.seat.cloud.vwgroup.com/v2/vehicles/{vin}/climatisation/settings'
         try:
@@ -1652,6 +1715,77 @@ class Connector(BaseConnector):
         except requests.exceptions.RetryError as retry_error:
             raise CommandError(f'Retrying failed: {retry_error}') from retry_error
         return command_arguments
+
+    def __on_charging_settings_change(self, attribute: GenericAttribute, value: Any) -> Any:
+        """
+        Callback for the charging setting change.
+        """
+        if attribute.parent is None or not isinstance(attribute.parent, SeatCupraCharging.Settings) \
+                or attribute.parent.parent is None \
+                or attribute.parent.parent.parent is None or not isinstance(attribute.parent.parent.parent, SeatCupraVehicle):
+            raise SetterError('Object hierarchy is not as expected')
+        settings: SeatCupraCharging.Settings = attribute.parent
+        vehicle: SeatCupraVehicle = attribute.parent.parent.parent
+        vin: Optional[str] = vehicle.vin.value
+        if vin is None:
+            raise SetterError('VIN in object hierarchy missing')
+        setting_dict = {}
+        precision: float = settings.maximum_current.precision if settings.maximum_current.precision is not None else 1.0
+        if isinstance(attribute, CurrentAttribute) and attribute.id == 'maximum_current':
+            value = round(value / precision) * precision
+            if settings.max_current_in_ampere:
+                setting_dict['maxChargeCurrentAcInAmperes'] = value
+            else:
+                if value < 6:
+                    raise SetterError('Maximum current must be greater than 6 amps')
+                if value < 16:
+                    setting_dict['maxChargeCurrentAc'] = 'reduced'
+                    value = 6.0
+                else:
+                    setting_dict['maxChargeCurrentAc'] = 'maximum'
+                    value = 16.0
+        elif settings.maximum_current.enabled and settings.maximum_current.value is not None:
+            if settings.max_current_in_ampere:
+                setting_dict['maxChargeCurrentAc_A'] = round(settings.maximum_current.value / precision) * precision
+            else:
+                if settings.maximum_current.value < 6:
+                    raise SetterError('Maximum current must be greater than 6 amps')
+                if settings.maximum_current.value < 16:
+                    setting_dict['maxChargeCurrentAc'] = 'reduced'
+                    settings.maximum_current.value = 6.0
+                else:
+                    setting_dict['maxChargeCurrentAc'] = 'maximum'
+                    settings.maximum_current.value = 16.0
+        if isinstance(attribute, BooleanAttribute) and attribute.id == 'auto_unlock':
+            setting_dict['autoUnlockPlugWhenChargedAc'] = 'on' if value else 'off'
+        elif settings.auto_unlock.enabled and settings.auto_unlock.value is not None:
+            setting_dict['autoUnlockPlugWhenChargedAc'] = 'on' if settings.auto_unlock.value else 'off'
+        charging_capability: Optional[Capability] = vehicle.capabilities.get_capability('charging')
+        if charging_capability is not None and ('supportsTargetStateOfCharge' not in charging_capability.parameters
+                                                or charging_capability.parameters['supportsTargetStateOfCharge'] != 'false'):
+            precision: float = settings.target_level.precision if settings.target_level.precision is not None else 10.0
+            if isinstance(attribute, LevelAttribute) and attribute.id == 'target_level':
+                value = round(value / precision) * precision
+                setting_dict['targetSoc'] = value
+            elif settings.target_level.enabled and settings.target_level.value is not None:
+                setting_dict['targetSoc'] = round(settings.target_level.value / precision) * precision
+
+        url: str = f'https://ola.prod.code.seat.cloud.vwgroup.com/v1/vehicles/{vin}/charging/settings'
+        try:
+            settings_response: requests.Response = self.session.post(url, data=json.dumps(setting_dict), allow_redirects=True)
+            if settings_response.status_code not in [requests.codes['ok'], requests.codes['created']]:
+                LOG.error('Could not set charging settings (%s)', settings_response.status_code)
+                raise SetterError(f'Could not set value ({settings_response.status_code})')
+        except requests.exceptions.ConnectionError as connection_error:
+            raise SetterError(f'Connection error: {connection_error}.'
+                              ' If this happens frequently, please check if other applications communicate with the Volkswagen server.') from connection_error
+        except requests.exceptions.ChunkedEncodingError as chunked_encoding_error:
+            raise SetterError(f'Error: {chunked_encoding_error}') from chunked_encoding_error
+        except requests.exceptions.ReadTimeout as timeout_error:
+            raise SetterError(f'Timeout during read: {timeout_error}') from timeout_error
+        except requests.exceptions.RetryError as retry_error:
+            raise SetterError(f'Retrying failed: {retry_error}') from retry_error
+        return value
 
     def get_version(self) -> str:
         return __version__
