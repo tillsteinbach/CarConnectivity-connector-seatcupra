@@ -1192,12 +1192,15 @@ class Connector(BaseConnector):
                     else:
                         vehicle.charging.settings.auto_unlock._set_value(None, measured=captured_at)  # pylint: disable=protected-access
                     if 'targetSoc_pct' in data['settings'] and data['settings']['targetSoc_pct'] is not None:
-                        vehicle.charging.settings.target_level.minimum = 50.0
-                        vehicle.charging.settings.target_level.maximum = 100.0
-                        vehicle.charging.settings.target_level.precision = 10.0
-                        # pylint: disable-next=protected-access
-                        vehicle.charging.settings.target_level._add_on_set_hook(self.__on_charging_settings_change)
-                        vehicle.charging.settings.target_level._is_changeable = True  # pylint: disable=protected-access
+                        charging_capability: Optional[Capability] = vehicle.capabilities.get_capability('charging')
+                        if charging_capability is not None and ('supportsTargetStateOfCharge' not in charging_capability.parameters
+                                                                or charging_capability.parameters['supportsTargetStateOfCharge'] != 'false'):
+                            vehicle.charging.settings.target_level.minimum = 50.0
+                            vehicle.charging.settings.target_level.maximum = 100.0
+                            vehicle.charging.settings.target_level.precision = 10.0
+                            # pylint: disable-next=protected-access
+                            vehicle.charging.settings.target_level._add_on_set_hook(self.__on_charging_settings_change)
+                            vehicle.charging.settings.target_level._is_changeable = True  # pylint: disable=protected-access
                         vehicle.charging.settings.target_level._set_value(data['settings']['targetSoc_pct'],  # pylint: disable=protected-access
                                                                           measured=captured_at)
                     else:
