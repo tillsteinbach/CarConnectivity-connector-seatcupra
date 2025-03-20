@@ -300,6 +300,8 @@ class Connector(BaseConnector):
                     vehicle_to_update = self.fetch_parking_position(vehicle_to_update)
                 if vehicle_to_update.capabilities.has_capability('vehicleHealthInspection', check_status_ok=True):
                     vehicle_to_update = self.fetch_maintenance(vehicle_to_update)
+                if vehicle_to_update.capabilities.has_capability('tripStatistics', check_status_ok=True):
+                    vehicle_to_update = self.fetch_trips(vehicle_to_update)
                 vehicle_to_update = self.fetch_connection_status(vehicle_to_update)
                 self.decide_state(vehicle_to_update)
         self.car_connectivity.transaction_end()
@@ -820,6 +822,26 @@ class Connector(BaseConnector):
             vehicle.position.latitude._set_value(None)  # pylint: disable=protected-access
             vehicle.position.longitude._set_value(None)  # pylint: disable=protected-access
             vehicle.position.position_type._set_value(None)  # pylint: disable=protected-access
+        return vehicle
+
+    def fetch_trips(self, vehicle: SeatCupraVehicle) -> SeatCupraVehicle:
+        vin = vehicle.vin.value
+        if vin is None:
+            raise ValueError('vehicle.vin cannot be None')
+        #
+        from enum import Enum
+        class TripType(Enum):
+            SHORTTERM = 'short'
+            LONGTERM = 'long'
+            CYCLIC = 'cyclic'
+            UNKNOWN = 'unkown trip type'
+        for tripType in [tripType for tripType in TripType if tripType != TripType.UNKNOWN]:
+            url = f'https://ola.prod.code.seat.cloud.vwgroup.com/v1/vehicles/{vin}/driving-data/{tripType.value.upper()}'
+            # {"tripId":"3638963010","tripEndTimestamp":"2025-03-18T16:49:24Z","tripType":"CYCLIC","vehicleType":"HYBRID","mileageKm":366,"startMileageKm":25047,"overallMileageKm":25413,"travelTime":992,"averageFuelConsumption":1.0,"averageElectricConsumption":29.6,"averageAuxConsumption":null,"averageRecuperation":null,"averageGasConsumption":null,"averageSpeedKmph":22}
+            response: requests.Response = self.session.get(url, allow_redirects=True)
+            #data = self._fetch_data(url, self.session)
+            print(response)
+            print(response.text)
         return vehicle
 
     def fetch_mileage(self, vehicle: SeatCupraVehicle, no_cache: bool = False) -> SeatCupraVehicle:
