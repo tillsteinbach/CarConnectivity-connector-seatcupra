@@ -33,7 +33,11 @@ class SpinCommand(GenericCommand):
     def value(self, new_value: Optional[Union[str, Dict]]) -> None:
         # Execute early hooks before parsing the value
         new_value = self._execute_on_set_hook(new_value, early_hook=True)
-        if isinstance(new_value, str):
+        if isinstance(new_value, SpinCommand.Command):
+            newvalue_dict = {}
+            newvalue_dict['command'] = new_value
+            new_value = newvalue_dict
+        elif isinstance(new_value, str):
             parser = ThrowingArgumentParser(prog='', add_help=False, exit_on_error=False)
             parser.add_argument('command', help='Command to execute', type=SpinCommand.Command,
                                 choices=list(SpinCommand.Command))
