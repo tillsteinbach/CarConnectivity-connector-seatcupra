@@ -1516,7 +1516,7 @@ class Connector(BaseConnector):
 
             try:
                 command_response: requests.Response = self.session.post(url, data='{}', allow_redirects=True)
-                if command_response.status_code not in (requests.codes['ok'], requests.codes['no_content']):
+                if command_response.status_code not in (requests.codes['ok'], requests.codes['no_content'], requests.codes['created']):
                     LOG.error('Could not execute wake command (%s: %s)', command_response.status_code, command_response.text)
                     raise CommandError(f'Could not execute wake command ({command_response.status_code}: {command_response.text})')
             except requests.exceptions.ConnectionError as connection_error:
@@ -1565,7 +1565,7 @@ class Connector(BaseConnector):
             url = f'https://ola.prod.code.seat.cloud.vwgroup.com/v1/vehicles/{vin}/honk-and-flash'
             try:
                 command_response: requests.Response = self.session.post(url, data=json.dumps(command_dict), allow_redirects=True)
-                if command_response.status_code not in (requests.codes['ok'], requests.codes['no_content']):
+                if command_response.status_code not in (requests.codes['ok'], requests.codes['no_content'], requests.codes['created']):
                     LOG.error('Could not execute honk or flash command (%s: %s)', command_response.status_code, command_response.text)
                     raise CommandError(f'Could not execute honk or flash command ({command_response.status_code}: {command_response.text})')
             except requests.exceptions.ConnectionError as connection_error:
