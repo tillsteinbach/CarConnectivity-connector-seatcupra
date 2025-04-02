@@ -19,7 +19,8 @@ These are the valid options for the Seat Cupra Connector
                     "spin": 1234, //S-Pin used for some special commands like locking/unlocking
                     "netrc": "~/.netr", // netrc file if to be used for passwords
                     "api_log_level": "debug", // Show debug information regarding the API
-                    "max_age": 300 //Cache requests to the server vor MAX_AGE seconds
+                    "max_age": 300, //Cache requests to the server vor MAX_AGE seconds
+                    "hide_vins": ["19XFB2F90CE040211", "1G2ZH35N074252067"] // Don't fetch these vins
                 }
             }
         ],
