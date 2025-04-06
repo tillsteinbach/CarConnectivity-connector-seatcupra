@@ -44,7 +44,7 @@ class SpinCommand(GenericCommand):
             parser.add_argument('--spin', dest='spin', help='Spin to be used instead of spin from config or .netrc', type=str, required=False,
                                 default=None)
             try:
-                args = parser.parse_args(new_value.split(sep=' '))
+                args = parser.parse_args(new_value.strip().split(sep=' '))
             except argparse.ArgumentError as e:
                 raise SetterError(f'Invalid format for SpinCommand: {e.message} {parser.format_usage()}') from e
 
