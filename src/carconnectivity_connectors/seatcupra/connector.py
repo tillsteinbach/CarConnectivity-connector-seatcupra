@@ -669,11 +669,13 @@ class Connector(BaseConnector):
                         if 'levelPct' in vehicle_status_data['engines'][drive_id] and vehicle_status_data['engines'][drive_id]['levelPct'] is not None:
                             # pylint: disable-next=protected-access
                             drive.level._set_value(value=vehicle_status_data['engines'][drive_id]['levelPct'])
+                            drive.level.precision = 1
                         else:
                             drive.level._set_value(None)  # pylint: disable=protected-access
                         if 'rangeKm' in vehicle_status_data['engines'][drive_id] and vehicle_status_data['engines'][drive_id]['rangeKm'] is not None:
                             # pylint: disable-next=protected-access
                             drive.range._set_value(value=vehicle_status_data['engines'][drive_id]['rangeKm'], unit=Length.KM)
+                            drive.range.precision = 1
                             total_range += vehicle_status_data['engines'][drive_id]['rangeKm']
                         else:
                             drive.range._set_value(None, unit=Length.KM)  # pylint: disable=protected-access
@@ -681,6 +683,7 @@ class Connector(BaseConnector):
                                                                                                      'levelPct',
                                                                                                      'rangeKm'})
                 vehicle.drives.total_range._set_value(total_range, unit=Length.KM)  # pylint: disable=protected-access
+                vehicle.drives.total_range.precision = 1
             else:
                 vehicle.drives.enabled = False
             if len(vehicle.drives.drives) > 0:
@@ -816,7 +819,9 @@ class Connector(BaseConnector):
             else:
                 longitude = None
             vehicle.position.latitude._set_value(latitude)  # pylint: disable=protected-access
+            vehicle.position.latitude.precision = 0.000001
             vehicle.position.longitude._set_value(longitude)  # pylint: disable=protected-access
+            vehicle.position.longitude.precision = 0.000001
             vehicle.position.position_type._set_value(Position.PositionType.PARKING)  # pylint: disable=protected-access
             log_extra_keys(LOG_API, 'parkingposition', data,  {'lat', 'lon'})
         else:
@@ -847,6 +852,7 @@ class Connector(BaseConnector):
         if data is not None:
             if 'mileageKm' in data and data['mileageKm'] is not None:
                 vehicle.odometer._set_value(data['mileageKm'], unit=Length.KM)  # pylint: disable=protected-access
+                vehicle.odometer.precision = 1
             else:
                 vehicle.odometer._set_value(None)  # pylint: disable=protected-access
             log_extra_keys(LOG_API, f'https://ola.prod.code.seat.cloud.vwgroup.com/v1/vehicles/{vin}/mileage', data,  {'mileageKm'})
@@ -869,22 +875,26 @@ class Connector(BaseConnector):
                             if 'rangeName' in range_dict and range_dict['rangeName'] is not None and range_dict['rangeName'] == 'electricRangeKm' \
                                     and 'value' in range_dict and range_dict['value'] is not None:
                                 drive.range._set_value(range_dict['value'], unit=Length.KM)  # pylint: disable=protected-access
+                                drive.range.precision = 1
                                 break
                     elif drive.type.enabled and drive.type.value == GenericDrive.Type.GASOLINE:
                         for range_dict in data['ranges']:
                             if 'rangeName' in range_dict and range_dict['rangeName'] is not None and range_dict['rangeName'] == 'gasolineRangeKm' \
                                     and 'value' in range_dict and range_dict['value'] is not None:
                                 drive.range._set_value(range_dict['value'], unit=Length.KM)  # pylint: disable=protected-access
+                                drive.range.precision = 1
                                 break
                     elif drive.type.enabled and drive.type.value == GenericDrive.Type.DIESEL:
                         for range_dict in data['ranges']:
                             if 'rangeName' in range_dict and range_dict['rangeName'] is not None and range_dict['rangeName'] == 'dieselRangeKm' \
                                     and 'value' in range_dict and range_dict['value'] is not None:
                                 drive.range._set_value(range_dict['value'], unit=Length.KM)  # pylint: disable=protected-access
+                                drive.range.precision = 1
                             elif 'rangeName' in range_dict and range_dict['rangeName'] is not None and range_dict['rangeName'] == 'adBlueKm' \
                                     and 'value' in range_dict and range_dict['value'] is not None:
                                 if isinstance(drive, DieselDrive):
                                     drive.adblue_range._set_value(range_dict['value'], unit=Length.KM)  # pylint: disable=protected-access
+                                    drive.adblue_range.precision = 1
             log_extra_keys(LOG_API, f'https://ola.prod.code.seat.cloud.vwgroup.com/v1/vehicles/{vin}/ranges', data,  {'ranges'})
         return vehicle
 
@@ -905,6 +915,7 @@ class Connector(BaseConnector):
                 vehicle.maintenance.inspection_due_at._set_value(None)  # pylint: disable=protected-access
             if 'inspectionDueKm' in data and data['inspectionDueKm'] is not None:
                 vehicle.maintenance.inspection_due_after._set_value(data['inspectionDueKm'], unit=Length.KM)  # pylint: disable=protected-access
+                vehicle.maintenance.inspection_due_after.precision = 1
             else:
                 vehicle.maintenance.inspection_due_after._set_value(None)  # pylint: disable=protected-access
             if 'oilServiceDueDays' in data and data['oilServiceDueDays'] is not None:
@@ -917,11 +928,13 @@ class Connector(BaseConnector):
                 vehicle.maintenance.oil_service_due_at._set_value(None)  # pylint: disable=protected-access
             if 'oilServiceDueKm' in data and data['oilServiceDueKm'] is not None:
                 vehicle.maintenance.oil_service_due_after._set_value(data['oilServiceDueKm'], unit=Length.KM)  # pylint: disable=protected-access
+                vehicle.maintenance.oil_service_due_after.precision = 1
             else:
                 vehicle.maintenance.oil_service_due_after._set_value(None)  # pylint: disable=protected-access
             log_extra_keys(LOG_API, f'/v1/vehicles/{vin}/maintenance', data,  {'inspectionDueDays', 'inspectionDueKm', 'oilServiceDueDays', 'oilServiceDueKm'})
         else:
             vehicle.odometer._set_value(None)  # pylint: disable=protected-access
+            vehicle.odometer.precision = 1
         return vehicle
 
     def fetch_climatisation(self, vehicle: SeatCupraVehicle, no_cache: bool = False) -> SeatCupraVehicle:
