@@ -316,7 +316,7 @@ class Connector(BaseConnector):
                     and vehicle.position.position_type.enabled and vehicle.position.position_type.value == Position.PositionType.PARKING:
                 vehicle.state._set_value(GenericVehicle.State.PARKED)  # pylint: disable=protected-access
             else:
-                vehicle.state._set_value(None)  # pylint: disable=protected-access
+                vehicle.state._set_value(GenericVehicle.State.UNKNOWN)  # pylint: disable=protected-access
 
     def fetch_vehicles(self) -> None:
         """
