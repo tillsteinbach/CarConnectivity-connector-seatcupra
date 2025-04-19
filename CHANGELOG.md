@@ -5,6 +5,10 @@ All notable changes to this project will be documented in this file.
 ## [Unreleased]
 - No unreleased changes so far
 
+## [0.4.2] - 2025-04-19
+### Fixed
+- Fix for problems introduced with PyJWT
+
 ## [0.4.1] - 2025-04-19
 ### Changed
 - Use PyJWT instead of jwt
@@ -49,7 +53,8 @@ All notable changes to this project will be documented in this file.
 ## [0.1] - 2025-03-02
 Initial release, let's go and give this to the public to try out...
 
-[unreleased]: https://github.com/tillsteinbach/CarConnectivity-connector-seatcupra/compare/v0.4.1...HEAD
+[unreleased]: https://github.com/tillsteinbach/CarConnectivity-connector-seatcupra/compare/v0.4.2...HEAD
+[0.4.2]: https://github.com/tillsteinbach/CarConnectivity-connector-seatcupra/releases/tag/v0.4.2
 [0.4.1]: https://github.com/tillsteinbach/CarConnectivity-connector-seatcupra/releases/tag/v0.4.1
 [0.4]: https://github.com/tillsteinbach/CarConnectivity-connector-seatcupra/releases/tag/v0.4
 [0.3]: https://github.com/tillsteinbach/CarConnectivity-connector-seatcupra/releases/tag/v0.3
