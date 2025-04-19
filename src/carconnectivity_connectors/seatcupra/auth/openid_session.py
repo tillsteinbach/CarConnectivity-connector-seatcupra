@@ -151,7 +151,7 @@ class OpenIDSession(requests.Session):
                     new_token['expires_in'] = self._token['expires_in']
                 else:
                     if 'id_token' in new_token:
-                        meta_data = jwt.decode(new_token['id_token'], do_verify=False)
+                        meta_data = jwt.decode(new_token['id_token'], options={"verify_signature": False})
                         if 'exp' in meta_data:
                             new_token['expires_at'] = meta_data['exp']
                             expires_at = datetime.fromtimestamp(meta_data['exp'], tz=timezone.utc)
