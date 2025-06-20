@@ -5,6 +5,10 @@ All notable changes to this project will be documented in this file.
 ## [Unreleased]
 - No unreleased changes so far
 
+## [0.4.4] - 2025-06-20
+### Fixed
+reupload to pypi
+
 ## [0.4.3] - 2025-06-20
 ### Fixed
 - Fixes bug that registers hooks several times, causing multiple calls to the servers
@@ -60,7 +64,8 @@ All notable changes to this project will be documented in this file.
 ## [0.1] - 2025-03-02
 Initial release, let's go and give this to the public to try out...
 
-[unreleased]: https://github.com/tillsteinbach/CarConnectivity-connector-seatcupra/compare/v0.4.3...HEAD
+[unreleased]: https://github.com/tillsteinbach/CarConnectivity-connector-seatcupra/compare/v0.4.4...HEAD
+[0.4.4]: https://github.com/tillsteinbach/CarConnectivity-connector-seatcupra/releases/tag/v0.4.4
 [0.4.3]: https://github.com/tillsteinbach/CarConnectivity-connector-seatcupra/releases/tag/v0.4.3
 [0.4.2]: https://github.com/tillsteinbach/CarConnectivity-connector-seatcupra/releases/tag/v0.4.2
 [0.4.1]: https://github.com/tillsteinbach/CarConnectivity-connector-seatcupra/releases/tag/v0.4.1
