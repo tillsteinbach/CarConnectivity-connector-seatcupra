@@ -47,7 +47,7 @@ from carconnectivity_connectors.seatcupra.command_impl import SpinCommand
 
 SUPPORT_IMAGES = False
 try:
-    from PIL import Image
+    from PIL import Image, UnidentifiedImageError
     import base64
     import io
     SUPPORT_IMAGES = True
@@ -1291,6 +1291,8 @@ class Connector(BaseConnector):
                             raise RetrievalError(f'Timeout during read: {timeout_error}') from timeout_error
                         except requests.exceptions.RetryError as retry_error:
                             raise RetrievalError(f'Retrying failed: {retry_error}') from retry_error
+                        except UnidentifiedImageError as unidentified_image_error:
+                            raise RetrievalError(f'Unidentified image error: {unidentified_image_error}') from unidentified_image_error
                     if img is not None:
                         vehicle._car_images[image_id] = img  # pylint: disable=protected-access
                         if image_id == 'side':
