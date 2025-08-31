@@ -379,7 +379,7 @@ class Connector(BaseConnector):
                             log_extra_keys(LOG_API, 'specifications', vehicle_dict['specifications'],  {'steeringRight', 'factoryModel'})
 
                         if isinstance(vehicle, SeatCupraVehicle):
-                            url = f'https://ola.prod.code.seat.cloud.vwgroup.com/v2/vehicles/{vin}/capabilities'
+                            url = f'https://ola.prod.code.seat.cloud.vwgroup.com/v1/user/{self.session.user_id}/vehicle/{vin}/capabilities'
                             capabilities_data: Dict[str, Any] | None = self._fetch_data(url, session=self.session)
                             if capabilities_data is not None and 'capabilities' in capabilities_data and capabilities_data['capabilities'] is not None:
                                 found_capabilities = set()
