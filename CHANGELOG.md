@@ -5,6 +5,10 @@ All notable changes to this project will be documented in this file.
 ## [Unreleased]
 - No unreleased changes so far
 
+## [0.4.7] - 2025-11-02
+### Changed
+- Updated some dependencies
+
 ## [0.4.6] - 2025-08-31
 ### Fixed
 Fixes 404 error when fetching capabilities
@@ -72,7 +76,8 @@ reupload to pypi
 ## [0.1] - 2025-03-02
 Initial release, let's go and give this to the public to try out...
 
-[unreleased]: https://github.com/tillsteinbach/CarConnectivity-connector-seatcupra/compare/v0.4.6...HEAD
+[unreleased]: https://github.com/tillsteinbach/CarConnectivity-connector-seatcupra/compare/v0.4.7...HEAD
+[0.4.7]: https://github.com/tillsteinbach/CarConnectivity-connector-seatcupra/releases/tag/v0.4.7
 [0.4.6]: https://github.com/tillsteinbach/CarConnectivity-connector-seatcupra/releases/tag/v0.4.6
 [0.4.5]: https://github.com/tillsteinbach/CarConnectivity-connector-seatcupra/releases/tag/v0.4.5
 [0.4.4]: https://github.com/tillsteinbach/CarConnectivity-connector-seatcupra/releases/tag/v0.4.4
