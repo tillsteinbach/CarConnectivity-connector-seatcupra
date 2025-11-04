@@ -1,6 +1,6 @@
 """Module implements the connector to interact with the Seat/Cupra API."""
 from __future__ import annotations
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 import threading
 
@@ -16,7 +16,7 @@ from carconnectivity.garage import Garage
 from carconnectivity.errors import AuthenticationError, TooManyRequestsError, RetrievalError, APIError, APICompatibilityError, \
     TemporaryAuthenticationError, SetterError, CommandError
 from carconnectivity.util import robust_time_parse, log_extra_keys, config_remove_credentials
-from carconnectivity.units import Length, Current
+from carconnectivity.units import Length, Current, Power
 from carconnectivity.doors import Doors
 from carconnectivity.windows import Windows
 from carconnectivity.lights import Lights
@@ -165,6 +165,27 @@ class Connector(BaseConnector):
         self.session.refresh()
 
         self._elapsed: List[timedelta] = []
+
+    def _update_charging_power(self, vehicle: GenericVehicle, raw_value: Any, source: str) -> None:
+        """
+        Normalize Seat/Cupra chargedPowerInKw payloads and update the vehicle object.
+        The Seat/Cupra APIs surface identical power fields in multiple endpoints; keeping the
+        parsing in one helper avoids subtle divergences across call sites.
+        """
+        if not isinstance(vehicle, ElectricVehicle):
+            return
+        if getattr(vehicle, "charging", None) is None or getattr(vehicle.charging, "power", None) is None:
+            return
+        if raw_value is None:
+            vehicle.charging.power._set_value(None)  # pylint: disable=protected-access
+            return
+        try:
+            charged_power = float(raw_value)
+        except (TypeError, ValueError):
+            LOG_API.info("Could not parse charged power value %s from %s", raw_value, source)
+            vehicle.charging.power._set_value(None)  # pylint: disable=protected-access
+            return
+        vehicle.charging.power._set_value(value=charged_power, unit=Power.KW)  # pylint: disable=protected-access
 
     def startup(self) -> None:
         self._background_thread = threading.Thread(target=self._background_loop, daemon=False)
@@ -723,6 +744,7 @@ class Connector(BaseConnector):
                     else:
                         if isinstance(vehicle, ElectricVehicle):
                             vehicle.charging.type._set_value(None)  # pylint: disable=protected-access
+                    self._update_charging_power(vehicle, charging_status.get('chargedPowerInKw'), 'vehicle_status.services.charging')
                     if 'remainingTime' in charging_status and charging_status['remainingTime'] is not None:
                         remaining_duration: timedelta = timedelta(minutes=charging_status['remainingTime'])
                         estimated_date_reached: datetime = datetime.now(tz=timezone.utc) + remaining_duration
@@ -732,7 +754,7 @@ class Connector(BaseConnector):
                     else:
                         if isinstance(vehicle, ElectricVehicle):
                             vehicle.charging.estimated_date_reached._set_value(None)  # pylint: disable=protected-access
-                    log_extra_keys(LOG_API, 'charging', charging_status, {'status', 'targetPct', 'currentPct', 'chargeMode', 'remainingTime'})
+                    log_extra_keys(LOG_API, 'charging', charging_status, {'status', 'targetPct', 'currentPct', 'chargeMode', 'chargedPowerInKw', 'remainingTime'})
                 else:
                     if isinstance(vehicle, ElectricVehicle):
                         vehicle.charging.enabled = False
@@ -1110,7 +1132,8 @@ class Connector(BaseConnector):
                         vehicle.charging.state._set_value(value=charging_state)  # pylint: disable=protected-access
                     else:
                         vehicle.charging.state._set_value(None)  # pylint: disable=protected-access
-                    log_extra_keys(LOG_API, 'charging',  data['charging'], {'state'})
+                    self._update_charging_power(vehicle, data['charging'].get('chargedPowerInKw'), 'charging.status')
+                    log_extra_keys(LOG_API, 'charging',  data['charging'], {'state', 'chargedPowerInKw'})
                 if 'plug' in data and data['plug'] is not None:
                     if 'connection' in data['plug'] and data['plug']['connection'] is not None:
                         if data['plug']['connection'] in [item.value for item in ChargingConnector.ChargingConnectorConnectionState]:
