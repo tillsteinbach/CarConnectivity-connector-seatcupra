@@ -311,27 +311,17 @@ class Connector(BaseConnector):
         Args:
             vehicle (SeatCupraVehicle): The SeatCupra vehicle object.
         """
-        if vehicle is None:
-            return
-
-        # Check if vehicle is offline
-        if vehicle.connection_state is not None and vehicle.connection_state.enabled \
-                and vehicle.connection_state.value == GenericVehicle.ConnectionState.OFFLINE:
-            vehicle.state._set_value(GenericVehicle.State.OFFLINE)  # pylint: disable=protected-access
-            return
-
-        # Check if ignition/engine is on
-        if hasattr(vehicle, 'is_active') and vehicle.is_active is not None and vehicle.is_active.enabled \
-                and vehicle.is_active.value:
-            vehicle.state._set_value(GenericVehicle.State.IGNITION_ON)  # pylint: disable=protected-access
-            return
-
-        # Check if vehicle is parked based on position type
-        if vehicle.position is not None and vehicle.position.enabled and vehicle.position.position_type is not None \
-                and vehicle.position.position_type.enabled and vehicle.position.position_type.value == Position.PositionType.PARKING:
-            vehicle.state._set_value(GenericVehicle.State.PARKED)  # pylint: disable=protected-access
-        else:
-            vehicle.state._set_value(GenericVehicle.State.UNKNOWN)  # pylint: disable=protected-access
+        if vehicle is not None:
+            if vehicle.connection_state is not None and vehicle.connection_state.enabled \
+                    and vehicle.connection_state.value == GenericVehicle.ConnectionState.OFFLINE:
+                vehicle.state._set_value(GenericVehicle.State.OFFLINE)  # pylint: disable=protected-access
+            elif vehicle.is_active is not None and vehicle.is_active.enabled and vehicle.is_active.value:
+                vehicle.state._set_value(GenericVehicle.State.IGNITION_ON)  # pylint: disable=protected-access
+            elif vehicle.position is not None and vehicle.position.enabled and vehicle.position.position_type is not None \
+                    and vehicle.position.position_type.enabled and vehicle.position.position_type.value == Position.PositionType.PARKING:
+                vehicle.state._set_value(GenericVehicle.State.PARKED)  # pylint: disable=protected-access
+            else:
+                vehicle.state._set_value(GenericVehicle.State.UNKNOWN)  # pylint: disable=protected-access
 
     def fetch_vehicles(self) -> None:
         """
