@@ -46,14 +46,18 @@ from carconnectivity_connectors.seatcupra.climatization import SeatCupraClimatiz
 from carconnectivity_connectors.seatcupra.command_impl import SpinCommand
 
 SUPPORT_IMAGES = False
+SUPPORT_IMAGES_STR: str = ""
 try:
     from PIL import Image, UnidentifiedImageError
     import base64
     import io
     SUPPORT_IMAGES = True
     from carconnectivity.attributes import ImageAttribute
-except ImportError:
-    pass
+except ImportError as exc:
+    if str(exc) == "No module named 'PIL'":
+        SUPPORT_IMAGES_STR = str(exc) + " (cannot find pillow library)"
+    else:
+        SUPPORT_IMAGES_STR = str(exc)  # pylint: disable=invalid-name
 
 if TYPE_CHECKING:
     from typing import Dict, List, Optional, Any, Union
@@ -1810,6 +1814,11 @@ class Connector(BaseConnector):
 
     def get_version(self) -> str:
         return __version__
+
+    def get_features(self) -> dict[str, tuple[bool, str]]:
+        features: dict[str, tuple[bool, str]] = {}
+        features['Images'] = (SUPPORT_IMAGES, SUPPORT_IMAGES_STR)
+        return features
 
     def get_type(self) -> str:
         return "carconnectivity-connector-seatcupra"
