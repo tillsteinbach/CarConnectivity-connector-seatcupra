@@ -16,7 +16,7 @@ from carconnectivity.garage import Garage
 from carconnectivity.errors import AuthenticationError, TooManyRequestsError, RetrievalError, APIError, APICompatibilityError, \
     TemporaryAuthenticationError, SetterError, CommandError
 from carconnectivity.util import robust_time_parse, log_extra_keys, config_remove_credentials
-from carconnectivity.units import Length, Current
+from carconnectivity.units import Length, Current, Power
 from carconnectivity.doors import Doors
 from carconnectivity.windows import Windows
 from carconnectivity.lights import Lights
@@ -750,6 +750,13 @@ class Connector(BaseConnector):
                     else:
                         if isinstance(vehicle, ElectricVehicle):
                             vehicle.charging.type._set_value(None)  # pylint: disable=protected-access
+                    if 'chargedPowerInKw' in charging_status and charging_status['chargedPowerInKw'] is not None:
+                        if isinstance(vehicle, ElectricVehicle):
+                            vehicle.charging.power._set_value(value=charging_status['chargedPowerInKw'], unit=Power.KW)  # pylint: disable=protected-access
+                            vehicle.charging.power.precision = 0.1
+                    else:
+                        if isinstance(vehicle, ElectricVehicle):
+                            vehicle.charging.power._set_value(None)  # pylint: disable=protected-access
                     if 'remainingTime' in charging_status and charging_status['remainingTime'] is not None:
                         remaining_duration: timedelta = timedelta(minutes=charging_status['remainingTime'])
                         estimated_date_reached: datetime = datetime.now(tz=timezone.utc) + remaining_duration
@@ -759,7 +766,7 @@ class Connector(BaseConnector):
                     else:
                         if isinstance(vehicle, ElectricVehicle):
                             vehicle.charging.estimated_date_reached._set_value(None)  # pylint: disable=protected-access
-                    log_extra_keys(LOG_API, 'charging', charging_status, {'status', 'targetPct', 'currentPct', 'chargeMode', 'remainingTime'})
+                    log_extra_keys(LOG_API, 'charging', charging_status, {'status', 'targetPct', 'currentPct', 'chargeMode', 'chargedPowerInKw', 'remainingTime'})
                 else:
                     if isinstance(vehicle, ElectricVehicle):
                         vehicle.charging.enabled = False
@@ -1137,6 +1144,11 @@ class Connector(BaseConnector):
                         vehicle.charging.state._set_value(value=charging_state)  # pylint: disable=protected-access
                     else:
                         vehicle.charging.state._set_value(None)  # pylint: disable=protected-access
+                    if 'chargedPowerInKw' in data['charging'] and data['charging']['chargedPowerInKw'] is not None:
+                        vehicle.charging.power._set_value(value=data['charging']['chargedPowerInKw'], unit=Power.KW)  # pylint: disable=protected-access
+                        vehicle.charging.power.precision = 0.1
+                    else:
+                        vehicle.charging.power._set_value(None)  # pylint: disable=protected-access
                     log_extra_keys(LOG_API, 'charging',  data['charging'], {'state'})
                 if 'plug' in data and data['plug'] is not None:
                     if 'connection' in data['plug'] and data['plug']['connection'] is not None:
