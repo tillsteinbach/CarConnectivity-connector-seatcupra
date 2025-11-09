@@ -3,7 +3,8 @@
 All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
-- No unreleased changes so far
+### Added
+- Populate actual charging power (kW) from Seat/Cupra API responses so EV charging data includes live power readings.
 
 ## [0.4.7] - 2025-11-02
 ### Changed
