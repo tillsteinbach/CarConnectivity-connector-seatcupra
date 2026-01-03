@@ -141,6 +141,10 @@ class Connector(BaseConnector):
         if 'max_age' in config:
             self.active_config['max_age'] = config['max_age']
         self.interval._set_value(timedelta(seconds=self.active_config['interval']))  # pylint: disable=protected-access
+        self.active_config['online_timeout'] = self.active_config['interval'] + 60
+        if 'online_timeout' in config:
+            self.active_config['online_timeout'] = config['online_timeout']
+        self.online_timeout: timedelta = timedelta(seconds=self.active_config['online_timeout'])
 
         if 'brand' in config:
             if config['brand'] not in ['seat', 'cupra']:
@@ -530,6 +534,7 @@ class Connector(BaseConnector):
         if vehicle_status_data:
             if 'updatedAt' in vehicle_status_data and vehicle_status_data['updatedAt'] is not None:
                 captured_at: Optional[datetime] = robust_time_parse(vehicle_status_data['updatedAt'])
+                self._update_online_tracking(vehicle=vehicle, last_measurement=captured_at)
             else:
                 captured_at: Optional[datetime] = None
             if 'locked' in vehicle_status_data and vehicle_status_data['locked'] is not None:
@@ -997,6 +1002,7 @@ class Connector(BaseConnector):
                 if 'carCapturedTimestamp' not in climatisation_status or climatisation_status['carCapturedTimestamp'] is None:
                     raise APIError('Could not fetch vehicle status, carCapturedTimestamp missing')
                 captured_at: datetime = robust_time_parse(climatisation_status['carCapturedTimestamp'])
+                self._update_online_tracking(vehicle=vehicle, last_measurement=captured_at)
                 if 'climatisationState' in climatisation_status and climatisation_status['climatisationState'] is not None:
                     if climatisation_status['climatisationState'].lower() in [item.value for item in Climatization.ClimatizationState]:
                         climatization_state: Climatization.ClimatizationState = \
@@ -1016,6 +1022,7 @@ class Connector(BaseConnector):
                 if 'carCapturedTimestamp' not in window_heating_status or window_heating_status['carCapturedTimestamp'] is None:
                     raise APIError('Could not fetch vehicle status, carCapturedTimestamp missing')
                 captured_at: datetime = robust_time_parse(window_heating_status['carCapturedTimestamp'])
+                self._update_online_tracking(vehicle=vehicle, last_measurement=captured_at)
                 if 'windowHeatingStatus' in window_heating_status and window_heating_status['windowHeatingStatus'] is not None:
                     heating_on: bool = False
                     all_heating_invalid: bool = True
@@ -1070,6 +1077,7 @@ class Connector(BaseConnector):
             if 'carCapturedTimestamp' not in data or data['carCapturedTimestamp'] is None:
                 raise APIError('Could not fetch vehicle status, carCapturedTimestamp missing')
             captured_at: datetime = robust_time_parse(data['carCapturedTimestamp'])
+            self._update_online_tracking(vehicle=vehicle, last_measurement=captured_at)
             if 'targetTemperatureInCelsius' in data and data['targetTemperatureInCelsius'] is not None:
                 # pylint: disable-next=protected-access
                 vehicle.climatization.settings.target_temperature._add_on_set_hook(self.__on_air_conditioning_settings_change)
@@ -1196,6 +1204,7 @@ class Connector(BaseConnector):
                     if 'carCapturedTimestamp' not in data['settings'] or data['settings']['carCapturedTimestamp'] is None:
                         raise APIError('Could not fetch vehicle status, carCapturedTimestamp missing')
                     captured_at: datetime = robust_time_parse(data['settings']['carCapturedTimestamp'])
+                    self._update_online_tracking(vehicle=vehicle, last_measurement=captured_at)
                     if 'maxChargeCurrentAC_A' in data['settings'] and data['settings']['maxChargeCurrentAC_A'] is not None:
                         if isinstance(vehicle.charging.settings, SeatCupraCharging.Settings):
                             vehicle.charging.settings.max_current_in_ampere = True
@@ -1341,6 +1350,31 @@ class Connector(BaseConnector):
                                 vehicle.images.images['car_picture'] = ImageAttribute(name="car_picture", parent=vehicle.images,
                                                                                       value=img, tags={'carconnectivity'})
         return vehicle
+
+    def _update_online_tracking(self, vehicle: SeatCupraVehicle, last_measurement: Optional[datetime]) -> None:
+        if last_measurement is not None and (vehicle.last_measurement is None or last_measurement > vehicle.last_measurement):
+            if (last_measurement + self.online_timeout) > datetime.now(tz=timezone.utc):
+                rest_timeout: timedelta = (last_measurement + self.online_timeout) - datetime.now(tz=timezone.utc)
+                # Only set to online if the timeout is greater than 60 seconds
+                if rest_timeout.total_seconds() > 60:
+                    LOG.info('Vehicle %s is online', vehicle.vin.value)
+                    vehicle.connection_state._set_value(GenericVehicle.ConnectionState.ONLINE)  # pylint: disable=protected-access
+                    if vehicle.online_timeout_timer is not None:
+                        vehicle.online_timeout_timer.cancel()
+                    rest_timeout = (last_measurement + self.online_timeout) - datetime.now(tz=timezone.utc)
+                    vehicle.online_timeout_timer = threading.Timer(rest_timeout.total_seconds(), self._set_vehicle_offline, args=[vehicle])
+                    vehicle.online_timeout_timer.start()
+            vehicle.last_measurement = last_measurement
+
+    def _set_vehicle_offline(self, vehicle: SeatCupraVehicle) -> None:
+        last_online_measurement: Optional[datetime] = vehicle.last_measurement
+        # The car goes offline approximatly 2 minutes after the last measurement
+        if last_online_measurement is not None:
+            last_online_measurement += timedelta(seconds=120)
+        vehicle.connection_state._set_value(vehicle.official_connection_state, measured=last_online_measurement)  # pylint: disable=protected-access
+        vehicle.online_timeout_timer = None
+        if vehicle.official_connection_state is not None:
+            LOG.info('Vehicle %s went from online to %s', vehicle.vin.value, vehicle.official_connection_state.value)
 
     def _record_elapsed(self, elapsed: timedelta) -> None:
         """

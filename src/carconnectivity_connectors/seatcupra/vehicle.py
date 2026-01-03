@@ -2,6 +2,10 @@
 from __future__ import annotations
 from typing import TYPE_CHECKING
 
+import threading
+
+from datetime import datetime
+
 from carconnectivity.vehicle import GenericVehicle, ElectricVehicle, CombustionVehicle, HybridVehicle
 from carconnectivity.attributes import BooleanAttribute
 
@@ -43,6 +47,9 @@ class SeatCupraVehicle(GenericVehicle):  # pylint: disable=too-many-instance-att
             self.capabilities.parent = self
             self.is_active: BooleanAttribute = origin.is_active
             self.is_active.parent = self
+            self.last_measurement: Optional[datetime] = origin.last_measurement
+            self.official_connection_state: Optional[GenericVehicle.ConnectionState] = origin.official_connection_state
+            self.online_timeout_timer: Optional[threading.Timer] = origin.online_timeout_timer
             if SUPPORT_IMAGES:
                 self._car_images = origin._car_images
         else:
@@ -50,8 +57,16 @@ class SeatCupraVehicle(GenericVehicle):  # pylint: disable=too-many-instance-att
             self.climatization = SeatCupraClimatization(vehicle=self, origin=self.climatization)
             self.capabilities: Capabilities = Capabilities(vehicle=self)
             self.is_active: BooleanAttribute = BooleanAttribute(name='is_active', parent=self, tags={'connector_custom'})
+            self.last_measurement = None
+            self.official_connection_state = None
+            self.online_timeout_timer: Optional[threading.Timer] = None
             if SUPPORT_IMAGES:
                 self._car_images: Dict[str, Image.Image] = {}
+
+    def __del__(self) -> None:
+        if self.online_timeout_timer is not None:
+            self.online_timeout_timer.cancel()
+            self.online_timeout_timer = None
 
 
 class SeatCupraElectricVehicle(ElectricVehicle, SeatCupraVehicle):
