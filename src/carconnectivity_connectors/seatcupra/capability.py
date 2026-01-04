@@ -8,7 +8,7 @@ from carconnectivity.objects import GenericObject
 from carconnectivity.attributes import StringAttribute, BooleanAttribute, DateAttribute, GenericAttribute
 
 if TYPE_CHECKING:
-    from typing import Dict, Optional, List
+    from typing import Dict, Optional
     from carconnectivity_connectors.seatcupra.vehicle import SeatCupraVehicle
 
 
@@ -16,8 +16,8 @@ class Capabilities(GenericObject):
     """
     Represents the capabilities of a Seat/Cupra vehicle.
     """
-    def __init__(self, vehicle: SeatCupraVehicle) -> None:
-        super().__init__(object_id='capabilities', parent=vehicle)
+    def __init__(self, vehicle: SeatCupraVehicle, initialization: Optional[Dict] = None) -> None:
+        super().__init__(object_id='capabilities', parent=vehicle, initialization=initialization)
         self.__capabilities: Dict[str, Capability] = {}
 
     @property
@@ -102,17 +102,17 @@ class Capability(GenericObject):
     Represents a capability of a SeatCupra vehicle.
     """
 
-    def __init__(self, capability_id: str, capabilities: Capabilities) -> None:
+    def __init__(self, capability_id: str, capabilities: Capabilities, initialization: Optional[Dict] = None) -> None:
         if capabilities is None:
             raise ValueError('Cannot create capability without capabilities')
         if id is None:
             raise ValueError('Capability ID cannot be None')
-        super().__init__(object_id=capability_id, parent=capabilities)
+        super().__init__(object_id=capability_id, parent=capabilities, initialization=initialization)
         self.delay_notifications = True
-        self.capability_id = StringAttribute("id", self, capability_id, tags={'connector_custom'})
-        self.expiration_date = DateAttribute("expiration_date", self, tags={'connector_custom'})
-        self.editable = BooleanAttribute("editable", self, tags={'connector_custom'})
-        self.status = GenericAttribute("status", self, value=[], tags={'connector_custom'})
+        self.capability_id = StringAttribute("id", self, capability_id, tags={'connector_custom'}, initialization=self.get_initialization('id'))
+        self.expiration_date = DateAttribute("expiration_date", self, tags={'connector_custom'}, initialization=self.get_initialization('expiration_date'))
+        self.editable = BooleanAttribute("editable", self, tags={'connector_custom'}, initialization=self.get_initialization('editable'))
+        self.status = GenericAttribute("status", self, value=[], tags={'connector_custom'}, initialization=self.get_initialization('status'))
         self.parameters: Dict[str, bool] = {}
         self.enabled = True
         self.delay_notifications = False

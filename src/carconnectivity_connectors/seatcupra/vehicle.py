@@ -40,9 +40,9 @@ class SeatCupraVehicle(GenericVehicle):  # pylint: disable=too-many-instance-att
         The license plate of the vehicle.
     """
     def __init__(self, vin: Optional[str] = None, garage: Optional[Garage] = None, managing_connector: Optional[BaseConnector] = None,
-                 origin: Optional[SeatCupraVehicle] = None) -> None:
+                 origin: Optional[SeatCupraVehicle] = None, initialization: Optional[Dict] = None) -> None:
         if origin is not None:
-            super().__init__(garage=garage, origin=origin)
+            super().__init__(garage=garage, origin=origin, initialization=initialization)
             self.capabilities: Capabilities = origin.capabilities
             self.capabilities.parent = self
             self.is_active: BooleanAttribute = origin.is_active
@@ -53,10 +53,12 @@ class SeatCupraVehicle(GenericVehicle):  # pylint: disable=too-many-instance-att
             if SUPPORT_IMAGES:
                 self._car_images = origin._car_images
         else:
-            super().__init__(vin=vin, garage=garage, managing_connector=managing_connector)
-            self.climatization = SeatCupraClimatization(vehicle=self, origin=self.climatization)
-            self.capabilities: Capabilities = Capabilities(vehicle=self)
-            self.is_active: BooleanAttribute = BooleanAttribute(name='is_active', parent=self, tags={'connector_custom'})
+            super().__init__(vin=vin, garage=garage, managing_connector=managing_connector, initialization=initialization)
+            self.climatization = SeatCupraClimatization(vehicle=self, origin=self.climatization,
+                                                        initialization=self.get_initialization('climatization'))
+            self.capabilities: Capabilities = Capabilities(vehicle=self, initialization=self.get_initialization('capabilities'))
+            self.is_active: BooleanAttribute = BooleanAttribute(name='is_active', parent=self, tags={'connector_custom'},
+                                                                initialization=self.get_initialization('is_active'))
             self.last_measurement = None
             self.official_connection_state = None
             self.online_timeout_timer: Optional[threading.Timer] = None
@@ -74,16 +76,16 @@ class SeatCupraElectricVehicle(ElectricVehicle, SeatCupraVehicle):
     Represents a Seat/Cupra electric vehicle.
     """
     def __init__(self, vin: Optional[str] = None, garage: Optional[Garage] = None, managing_connector: Optional[BaseConnector] = None,
-                 origin: Optional[SeatCupraVehicle] = None) -> None:
+                 origin: Optional[SeatCupraVehicle] = None, initialization: Optional[Dict] = None) -> None:
         if origin is not None:
-            super().__init__(garage=garage, origin=origin)
+            super().__init__(garage=garage, origin=origin, initialization=initialization)
             if isinstance(origin, ElectricVehicle):
                 self.charging: Charging = SeatCupraCharging(vehicle=self, origin=origin.charging)
             else:
                 self.charging: Charging = SeatCupraCharging(vehicle=self, origin=self.charging)
         else:
-            super().__init__(vin=vin, garage=garage, managing_connector=managing_connector)
-            self.charging: Charging = SeatCupraCharging(vehicle=self, origin=self.charging)
+            super().__init__(vin=vin, garage=garage, managing_connector=managing_connector, initialization=initialization)
+            self.charging: Charging = SeatCupraCharging(vehicle=self, origin=self.charging, initialization=self.get_initialization('charging'))
 
 
 class SeatCupraCombustionVehicle(CombustionVehicle, SeatCupraVehicle):
@@ -91,11 +93,11 @@ class SeatCupraCombustionVehicle(CombustionVehicle, SeatCupraVehicle):
     Represents a Seat/Cupra combustion vehicle.
     """
     def __init__(self, vin: Optional[str] = None, garage: Optional[Garage] = None, managing_connector: Optional[BaseConnector] = None,
-                 origin: Optional[SeatCupraVehicle] = None) -> None:
+                 origin: Optional[SeatCupraVehicle] = None, initialization: Optional[Dict] = None) -> None:
         if origin is not None:
-            super().__init__(garage=garage, origin=origin)
+            super().__init__(garage=garage, origin=origin, initialization=initialization)
         else:
-            super().__init__(vin=vin, garage=garage, managing_connector=managing_connector)
+            super().__init__(vin=vin, garage=garage, managing_connector=managing_connector, initialization=initialization)
 
 
 class SeatCupraHybridVehicle(HybridVehicle, SeatCupraVehicle):
@@ -103,8 +105,8 @@ class SeatCupraHybridVehicle(HybridVehicle, SeatCupraVehicle):
     Represents a Seat/Cupra hybrid vehicle.
     """
     def __init__(self, vin: Optional[str] = None, garage: Optional[Garage] = None, managing_connector: Optional[BaseConnector] = None,
-                 origin: Optional[SeatCupraVehicle] = None) -> None:
+                 origin: Optional[SeatCupraVehicle] = None, initialization: Optional[Dict] = None) -> None:
         if origin is not None:
-            super().__init__(garage=garage, origin=origin)
+            super().__init__(garage=garage, origin=origin, initialization=initialization)
         else:
-            super().__init__(vin=vin, garage=garage, managing_connector=managing_connector)
+            super().__init__(vin=vin, garage=garage, managing_connector=managing_connector, initialization=initialization)
