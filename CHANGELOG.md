@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 ## [Unreleased]
 - No unreleased changes so far
 
+## [0.5] - 2026-01-04
+### Added
+- Support for initializing attributes on startup form static entries in the configuration
+- Guessing of vehicle online state based on last successful data fetch time and configured interval
+
+Note: This connector is required for compatibility with CarConnectivity version 0.11 and higher.
+
 ## [0.4.8] - 2025-11-29
 ### Added
 - Added is_active attribute and extended vehicle state to make use of it
@@ -81,7 +88,8 @@ reupload to pypi
 ## [0.1] - 2025-03-02
 Initial release, let's go and give this to the public to try out...
 
-[unreleased]: https://github.com/tillsteinbach/CarConnectivity-connector-seatcupra/compare/v0.4.8...HEAD
+[unreleased]: https://github.com/tillsteinbach/CarConnectivity-connector-seatcupra/compare/v0.5...HEAD
+[0.5]: https://github.com/tillsteinbach/CarConnectivity-connector-seatcupra/releases/tag/v0.5
 [0.4.8]: https://github.com/tillsteinbach/CarConnectivity-connector-seatcupra/releases/tag/v0.4.8
 [0.4.7]: https://github.com/tillsteinbach/CarConnectivity-connector-seatcupra/releases/tag/v0.4.7
 [0.4.6]: https://github.com/tillsteinbach/CarConnectivity-connector-seatcupra/releases/tag/v0.4.6
