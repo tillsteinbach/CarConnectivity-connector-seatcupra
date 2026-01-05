@@ -1,5 +1,6 @@
 """Module for vehicle classes."""
 from __future__ import annotations
+
 from typing import TYPE_CHECKING
 
 import threading
@@ -50,6 +51,7 @@ class SeatCupraVehicle(GenericVehicle):  # pylint: disable=too-many-instance-att
             self.last_measurement: Optional[datetime] = origin.last_measurement
             self.official_connection_state: Optional[GenericVehicle.ConnectionState] = origin.official_connection_state
             self.online_timeout_timer: Optional[threading.Timer] = origin.online_timeout_timer
+            self.online_timeout_timer_lock: threading.Lock = threading.Lock()
             if SUPPORT_IMAGES:
                 self._car_images = origin._car_images
         else:
@@ -66,9 +68,10 @@ class SeatCupraVehicle(GenericVehicle):  # pylint: disable=too-many-instance-att
                 self._car_images: Dict[str, Image.Image] = {}
 
     def __del__(self) -> None:
-        if self.online_timeout_timer is not None:
-            self.online_timeout_timer.cancel()
-            self.online_timeout_timer = None
+        with self.online_timeout_timer_lock:
+            if self.online_timeout_timer is not None:
+                self.online_timeout_timer.cancel()
+                self.online_timeout_timer = None
 
 
 class SeatCupraElectricVehicle(ElectricVehicle, SeatCupraVehicle):
