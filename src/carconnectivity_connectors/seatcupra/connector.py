@@ -520,7 +520,9 @@ class Connector(BaseConnector):
                     and 'mode' in vehicle_connection_data['connection'] and vehicle_connection_data['connection']['mode'] is not None:
                 if vehicle_connection_data['connection']['mode'] in [item.value for item in GenericVehicle.ConnectionState]:
                     connection_state: GenericVehicle.ConnectionState = GenericVehicle.ConnectionState(vehicle_connection_data['connection']['mode'])
-                    vehicle.connection_state._set_value(connection_state)  # pylint: disable=protected-access
+                    if vehicle.connection_state.value != GenericVehicle.ConnectionState.ONLINE:
+                        vehicle.connection_state._set_value(connection_state)  # pylint: disable=protected-access
+                    vehicle.official_connection_state = connection_state
                 else:
                     vehicle.connection_state._set_value(GenericVehicle.ConnectionState.UNKNOWN)  # pylint: disable=protected-access
                     LOG_API.info('Unknown connection state %s', vehicle_connection_data['connection']['mode'])
