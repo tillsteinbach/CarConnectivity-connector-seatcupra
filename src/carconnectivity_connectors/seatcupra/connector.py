@@ -1359,8 +1359,8 @@ class Connector(BaseConnector):
                                 vehicle.images.images['exterior_side']._set_value(img)  # pylint: disable=protected-access
                             else:
                                 vehicle.images.images['exterior_side'] = ImageAttribute(name="exterior_side", parent=vehicle.images,
-                                                                                      value=img, tags={'connector_custom'},
-                                                                                      initialization=vehicle.images.get_initialization('exterior_side'))
+                                                                                        value=img, tags={'connector_custom'},
+                                                                                        initialization=vehicle.images.get_initialization('exterior_side'))
                         elif image_id == 'front':
                             if 'exterior_front' in vehicle.images.images:
                                 vehicle.images.images['exterior_front']._set_value(img)  # pylint: disable=protected-access
