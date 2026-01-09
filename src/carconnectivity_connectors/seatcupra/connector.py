@@ -1353,7 +1353,41 @@ class Connector(BaseConnector):
                                 vehicle.images.images['car_picture']._set_value(img)  # pylint: disable=protected-access
                             else:
                                 vehicle.images.images['car_picture'] = ImageAttribute(name="car_picture", parent=vehicle.images,
-                                                                                      value=img, tags={'carconnectivity'})
+                                                                                      value=img, tags={'carconnectivity'},
+                                                                                      initialization=vehicle.images.get_initialization('car_picture'))
+                            if 'exterior_side' in vehicle.images.images:
+                                vehicle.images.images['exterior_side']._set_value(img)  # pylint: disable=protected-access
+                            else:
+                                vehicle.images.images['exterior_side'] = ImageAttribute(name="exterior_side", parent=vehicle.images,
+                                                                                      value=img, tags={'connector_custom'},
+                                                                                      initialization=vehicle.images.get_initialization('exterior_side'))
+                        elif image_id == 'front':
+                            if 'exterior_front' in vehicle.images.images:
+                                vehicle.images.images['exterior_front']._set_value(img)  # pylint: disable=protected-access
+                            else:
+                                vehicle.images.images['exterior_front'] = ImageAttribute(name="exterior_front", parent=vehicle.images,
+                                                                                         value=img, tags={'connector_custom'},
+                                                                                         initialization=vehicle.images.get_initialization('exterior_front'))
+                        elif image_id == 'rear':
+                            if 'exterior_rear' in vehicle.images.images:
+                                vehicle.images.images['exterior_rear']._set_value(img)  # pylint: disable=protected-access
+                            else:
+                                vehicle.images.images['exterior_rear'] = ImageAttribute(name="exterior_rear", parent=vehicle.images,
+                                                                                        value=img, tags={'connector_custom'},
+                                                                                        initialization=vehicle.images.get_initialization('exterior_rear'))
+                        elif image_id == 'top':
+                            if 'topview' in vehicle.images.images:
+                                vehicle.images.images['topview']._set_value(img)  # pylint: disable=protected-access
+                            else:
+                                vehicle.images.images['topview'] = ImageAttribute(name="topview", parent=vehicle.images,
+                                                                                  value=img, tags={'connector_custom'},
+                                                                                  initialization=vehicle.images.get_initialization('topview'))
+                            if 'interior_top' in vehicle.images.images:
+                                vehicle.images.images['interior_top']._set_value(img)  # pylint: disable=protected-access
+                            else:
+                                vehicle.images.images['interior_top'] = ImageAttribute(name="interior_top", parent=vehicle.images,
+                                                                                       value=img, tags={'connector_custom'},
+                                                                                       initialization=vehicle.images.get_initialization('interior_top'))
         return vehicle
 
     def _update_online_tracking(self, vehicle: SeatCupraVehicle, last_measurement: Optional[datetime]) -> None:
