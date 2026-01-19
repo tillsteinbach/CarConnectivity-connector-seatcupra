@@ -725,22 +725,31 @@ class Connector(BaseConnector):
             if len(vehicle.drives.drives) > 0:
                 has_electric = False
                 has_combustion = False
+                has_diesel = False
                 for drive in vehicle.drives.drives.values():
                     if isinstance(drive, ElectricDrive):
                         has_electric = True
                     elif isinstance(drive, CombustionDrive):
                         has_combustion = True
+                        if isinstance(drive, DieselDrive):
+                            has_diesel = True
                 if has_electric and not has_combustion and not isinstance(vehicle, SeatCupraElectricVehicle):
                     LOG.debug('Promoting %s to SeatCupraElectricVehicle object for %s', vehicle.__class__.__name__, vin)
                     vehicle = SeatCupraElectricVehicle(garage=self.car_connectivity.garage, origin=vehicle)
+                    vehicle.type._set_value(GenericVehicle.Type.ELECTRIC)  # pylint: disable=protected-access
                     self.car_connectivity.garage.replace_vehicle(vin, vehicle)
                 elif has_combustion and not has_electric and not isinstance(vehicle, SeatCupraCombustionVehicle):
                     LOG.debug('Promoting %s to SeatCupraCombustionVehicle object for %s', vehicle.__class__.__name__, vin)
                     vehicle = SeatCupraCombustionVehicle(garage=self.car_connectivity.garage, origin=vehicle)
+                    if has_diesel:
+                        vehicle.type._set_value(GenericVehicle.Type.DIESEL)  # pylint: disable=protected-access
+                    else:
+                        vehicle.type._set_value(GenericVehicle.Type.FUEL)  # pylint: disable=protected-access
                     self.car_connectivity.garage.replace_vehicle(vin, vehicle)
                 elif has_combustion and has_electric and not isinstance(vehicle, SeatCupraHybridVehicle):
                     LOG.debug('Promoting %s to SeatCupraHybridVehicle object for %s', vehicle.__class__.__name__, vin)
                     vehicle = SeatCupraHybridVehicle(garage=self.car_connectivity.garage, origin=vehicle)
+                    vehicle.type._set_value(GenericVehicle.Type.HYBRID)  # pylint: disable=protected-access
                     self.car_connectivity.garage.replace_vehicle(vin, vehicle)
             if 'services' in vehicle_status_data and vehicle_status_data['services'] is not None:
                 if 'charging' in vehicle_status_data['services'] and vehicle_status_data['services']['charging'] is not None:
