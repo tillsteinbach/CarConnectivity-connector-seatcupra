@@ -5,6 +5,11 @@ All notable changes to this project will be documented in this file.
 ## [Unreleased]
 - No unreleased changes so far
 
+## [0.5.2] - 2026-01-23
+### Fixed
+- Improves handling of token refresh (thanks to user @mikrohard)
+- Vehicle images will not be downloaded more often than every 24h
+
 ## [0.5.1] - 2026-01-11
 ### Fixed
 - Fixes online state calculation
@@ -93,7 +98,8 @@ reupload to pypi
 ## [0.1] - 2025-03-02
 Initial release, let's go and give this to the public to try out...
 
-[unreleased]: https://github.com/tillsteinbach/CarConnectivity-connector-seatcupra/compare/v0.5.1...HEAD
+[unreleased]: https://github.com/tillsteinbach/CarConnectivity-connector-seatcupra/compare/v0.5.2...HEAD
+[0.5.2]: https://github.com/tillsteinbach/CarConnectivity-connector-seatcupra/releases/tag/v0.5.2
 [0.5.1]: https://github.com/tillsteinbach/CarConnectivity-connector-seatcupra/releases/tag/v0.5.1
 [0.5]: https://github.com/tillsteinbach/CarConnectivity-connector-seatcupra/releases/tag/v0.5
 [0.4.8]: https://github.com/tillsteinbach/CarConnectivity-connector-seatcupra/releases/tag/v0.4.8
