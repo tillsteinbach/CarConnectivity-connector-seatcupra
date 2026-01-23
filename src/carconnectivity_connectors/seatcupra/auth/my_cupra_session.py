@@ -72,6 +72,10 @@ class MyCupraSession(VWWebSession):
 
     def login(self):
         super(MyCupraSession, self).login()
+        # Clear connection pools before login to prevent stale connection reuse
+        # This is critical to prevent "Remote end closed connection without response" errors
+        if hasattr(self, '_clear_connection_pools'):
+            self._clear_connection_pools()
         # retrieve authorization URL
         authorization_url_str: str = self.authorization_url(url='https://identity.vwgroup.io/oidc/v1/authorize')
         if self.redirect_uri is not None and authorization_url_str.startswith(self.redirect_uri):
@@ -146,7 +150,7 @@ class MyCupraSession(VWWebSession):
                                        access_type=AccessType.NONE)  # pyright: ignore reportCallIssue
             if token_response.status_code != requests.codes['ok']:
                 raise TemporaryAuthenticationError(f'Token could not be fetched due to temporary MyCupra failure: {token_response.status_code}')
-            # parse token from response body
+            # parse token from response body (this internally sets self.token)
             token = self.parse_from_body(token_response.text)
 
             return token
@@ -172,7 +176,7 @@ class MyCupraSession(VWWebSession):
             token['refresh_token'] = token.pop('refreshToken')
         # generate json from fixed dict
         fixed_token_response = to_unicode(json.dumps(token)).encode("utf-8")
-        # Let OAuthlib parse the token
+        # Let OAuthlib parse the token (this internally sets self.token)
         return super(MyCupraSession, self).parse_from_body(token_response=fixed_token_response, state=state)
 
     def refresh_tokens(
@@ -216,7 +220,7 @@ class MyCupraSession(VWWebSession):
         # Store old refresh token in case no new one is given
         refresh_token = refresh_token or self.refresh_token
         if refresh_token is None:
-            self.login()
+            self.login_with_retry()
             return self.token
 
         if headers is None:
@@ -237,6 +241,28 @@ class MyCupraSession(VWWebSession):
             }
 
         headers['content-type'] = 'application/x-www-form-urlencoded; charset=utf-8'
+
+        # Close any idle connections to prevent reusing stale connections
+        # This helps prevent "Remote end closed connection without response" errors
+        # that occur when trying to reuse a connection that the server has closed
+        try:
+            # Get the HTTPAdapter and close idle connections in the pool
+            adapter = self.get_adapter(token_url)
+            if hasattr(adapter, 'poolmanager') and adapter.poolmanager is not None:
+                # Clear idle connections from the pool
+                adapter.poolmanager.clear()
+                LOG.debug("Cleared connection pool before token refresh")
+        except Exception as e:
+            # If clearing fails, log but continue - not critical
+            LOG.debug("Could not clear connection pool: %s", str(e))
+
+        # Use a shorter timeout for token refresh to prevent stale connection issues
+        # Token endpoints should respond quickly; 30 seconds is more than enough
+        # This prevents holding connections open for 180 seconds which can lead to
+        # "Remote end closed connection without response" errors
+        if timeout is None:
+            timeout = 30
+
 
         tries = 0
         while True:
