@@ -123,6 +123,15 @@ class SeatCupraLocationService(LocationService):  # pylint: disable=too-few-publ
                         except requests.exceptions.JSONDecodeError as json_error:
                             self.log.error(f"Error decoding JSON response from Skoda API for charging station details: {json_error}")
                         return charging_station
+        except requests.exceptions.ConnectionError as connection_error:
+            self.log.error(f'Connection error: {connection_error}.'
+                           ' If this happens frequently, please check if other applications communicate with the Skoda server.')
+        except requests.exceptions.ChunkedEncodingError as chunked_encoding_error:
+            self.log.error(f'Error: {chunked_encoding_error}')
+        except requests.exceptions.ReadTimeout as timeout_error:
+            self.log.error(f'Timeout during read: {timeout_error}')
+        except requests.exceptions.RetryError as retry_error:
+            self.log.error(f'Retrying failed: {retry_error}')
         except requests.exceptions.JSONDecodeError as json_error:
             self.log.error(f"Error decoding JSON response from Skoda API: {json_error}")
             return None
