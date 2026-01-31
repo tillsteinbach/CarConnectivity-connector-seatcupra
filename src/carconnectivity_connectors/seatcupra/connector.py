@@ -44,6 +44,8 @@ from carconnectivity_connectors.seatcupra.charging import SeatCupraCharging, map
 from carconnectivity_connectors.seatcupra.climatization import SeatCupraClimatization
 from carconnectivity_connectors.seatcupra.command_impl import SpinCommand
 
+from carconnectivity_connectors.seatcupra.services.seatcupra_location_service import SeatCupraLocationService
+
 SUPPORT_IMAGES = False
 SUPPORT_IMAGES_STR: str = ""
 try:
@@ -173,6 +175,10 @@ class Connector(BaseConnector):
         self.session.retries = 3
         self.session.timeout = 30
         self.session.refresh()
+
+        self.location_service: SeatCupraLocationService = SeatCupraLocationService("seatcupra_location_service", car_connectivity, LOG, self)
+        for service_type, priority in self.location_service.get_types():
+            self.car_connectivity.add_service_for(service_type, self.location_service, priority)
 
         self._elapsed: List[timedelta] = []
 
