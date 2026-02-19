@@ -42,7 +42,7 @@ from carconnectivity_connectors.seatcupra.capability import Capability
 from carconnectivity_connectors.seatcupra.vehicle import SeatCupraVehicle, SeatCupraElectricVehicle, SeatCupraCombustionVehicle, SeatCupraHybridVehicle
 from carconnectivity_connectors.seatcupra.charging import SeatCupraCharging, mapping_seatcupra_charging_state
 from carconnectivity_connectors.seatcupra.climatization import SeatCupraClimatization
-from carconnectivity_connectors.seatcupra.command_impl import SpinCommand
+from carconnectivity_connectors.seatcupra.command_impl import SpinCommand, DestinationCommand
 
 from carconnectivity_connectors.seatcupra.services.seatcupra_location_service import SeatCupraLocationService
 
@@ -476,6 +476,18 @@ class Connector(BaseConnector):
                                         wake_sleep_command._add_on_set_hook(self.__on_wake_sleep)  # pylint: disable=protected-access
                                         wake_sleep_command.enabled = True
                                         vehicle.commands.add_command(wake_sleep_command)
+
+                                # Add send destination command if routing capabilities are available
+                                has_destination_capability = vehicle.capabilities.has_capability('destinations', check_status_ok=True) \
+                                    or vehicle.capabilities.has_capability('routing', check_status_ok=True) \
+                                    or vehicle.capabilities.has_capability('eRoutePlanner', check_status_ok=True)
+                                if has_destination_capability:
+                                    if vehicle.commands is not None and vehicle.commands.commands is not None \
+                                            and not vehicle.commands.contains_command('send-destination'):
+                                        destination_command = DestinationCommand(parent=vehicle.commands)
+                                        destination_command._add_on_set_hook(self.__on_send_destination)  # pylint: disable=protected-access
+                                        destination_command.enabled = True
+                                        vehicle.commands.add_command(destination_command)
 
                                 # Add honkAndFlash command if necessary capabilities are available
                                 if vehicle.capabilities.has_capability('honkAndFlash', check_status_ok=True):
@@ -1688,6 +1700,44 @@ class Connector(BaseConnector):
             raise CommandError('Sleep command not supported by vehicle. Vehicle will put itself to sleep')
         else:
             raise CommandError(f'Unknown command {command_arguments["command"]}')
+        return command_arguments
+
+    def __on_send_destination(self, destination_command: DestinationCommand, command_arguments: Union[str, Dict[str, Any]]) \
+            -> Union[str, Dict[str, Any]]:
+        if destination_command.parent is None or destination_command.parent.parent is None \
+                or not isinstance(destination_command.parent.parent, GenericVehicle):
+            raise CommandError('Object hierarchy is not as expected')
+        if not isinstance(command_arguments, dict):
+            raise CommandError('Command arguments are not a dictionary')
+        vehicle: GenericVehicle = destination_command.parent.parent
+        vin: Optional[str] = vehicle.vin.value
+        if vin is None:
+            raise CommandError('VIN in object hierarchy missing')
+        if 'command' not in command_arguments:
+            raise CommandError('Command argument missing')
+        if command_arguments['command'] != DestinationCommand.Command.SEND:
+            raise CommandError(f'Unknown command {command_arguments["command"]}')
+        if 'destination' not in command_arguments or not isinstance(command_arguments['destination'], dict):
+            raise CommandError('Destination data is missing')
+        destination_data = command_arguments['destination']
+        url = f'https://ola.prod.code.seat.cloud.vwgroup.com/v1/users/vehicles/{vin}/destination'
+        payload = [destination_data]
+        try:
+            command_response: requests.Response = self.session.put(url, data=json.dumps(payload), allow_redirects=True)
+            if command_response.status_code not in (
+                    requests.codes['accepted'], requests.codes['ok'], requests.codes['no_content'], requests.codes['created']):
+                LOG.error('Could not execute destination command (%s: %s)', command_response.status_code, command_response.text)
+                raise CommandError(f'Could not execute destination command ({command_response.status_code}: {command_response.text})')
+        except requests.exceptions.ConnectionError as connection_error:
+            raise CommandError(f'Connection error: {connection_error}.'
+                               ' If this happens frequently, please check if other applications communicate with the Seat/Cupra server.') \
+                from connection_error
+        except requests.exceptions.ChunkedEncodingError as chunked_encoding_error:
+            raise CommandError(f'Error: {chunked_encoding_error}') from chunked_encoding_error
+        except requests.exceptions.ReadTimeout as timeout_error:
+            raise CommandError(f'Timeout during read: {timeout_error}') from timeout_error
+        except requests.exceptions.RetryError as retry_error:
+            raise CommandError(f'Retrying failed: {retry_error}') from retry_error
         return command_arguments
 
     def __on_honk_flash(self, honk_flash_command: HonkAndFlashCommand, command_arguments: Union[str, Dict[str, Any]]) \
