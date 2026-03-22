@@ -40,6 +40,9 @@ class SessionUser():
     def __str__(self) -> str:
         return f'{self.username}:{self.password}'
 
+    def __repr__(self) -> str:
+        return f'SessionUser(username={self.username!r}, password=***)'
+
 
 class Service(Enum):
     """
