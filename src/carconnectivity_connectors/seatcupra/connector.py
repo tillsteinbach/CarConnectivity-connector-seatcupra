@@ -1335,7 +1335,7 @@ class Connector(BaseConnector):
                         img = Image.open(io.BytesIO(img))  # pyright: ignore[reportPossiblyUnboundVariable]
                         cache_date = datetime.fromisoformat(cache_date_string)
                     if img is None or self.active_config['max_age_static'] is None \
-                            or (cache_date is not None and cache_date < (datetime.utcnow() - timedelta(seconds=self.active_config['max_age_static']))):
+                            or (cache_date is not None and cache_date < (datetime.now(tz=timezone.utc) - timedelta(seconds=self.active_config['max_age_static']))):
                         try:
                             image_download_response = requests.get(image_url, stream=True, timeout=10)
                             if image_download_response.status_code == requests.codes['ok']:
@@ -1344,7 +1344,7 @@ class Connector(BaseConnector):
                                     buffered = io.BytesIO()  # pyright: ignore[reportPossiblyUnboundVariable]
                                     img.save(buffered, format="PNG")
                                     img_str = base64.b64encode(buffered.getvalue()).decode("utf-8")  # pyright: ignore[reportPossiblyUnboundVariable]
-                                    self.session.cache[image_url] = (img_str, str(datetime.utcnow()))
+                                    self.session.cache[image_url] = (img_str, str(datetime.now(tz=timezone.utc)))
                             elif image_download_response.status_code == requests.codes['unauthorized']:
                                 LOG.info('Got 401 Unauthorized - attempting token refresh')
                                 try:
@@ -1360,7 +1360,7 @@ class Connector(BaseConnector):
                                         buffered = io.BytesIO()  # pyright: ignore[reportPossiblyUnboundVariable]
                                         img.save(buffered, format="PNG")
                                         img_str = base64.b64encode(buffered.getvalue()).decode("utf-8")  # pyright: ignore[reportPossiblyUnboundVariable]
-                                        self.session.cache[image_url] = (img_str, str(datetime.utcnow()))
+                                        self.session.cache[image_url] = (img_str, str(datetime.now(tz=timezone.utc)))
                         except requests.exceptions.ConnectionError as connection_error:
                             raise RetrievalError(f'Connection error: {connection_error}') from connection_error
                         except requests.exceptions.ChunkedEncodingError as chunked_encoding_error:
@@ -1455,14 +1455,14 @@ class Connector(BaseConnector):
             data, cache_date_string = session.cache[url]
             cache_date = datetime.fromisoformat(cache_date_string)
         if data is None or self.active_config['max_age'] is None \
-                or (cache_date is not None and cache_date < (datetime.utcnow() - timedelta(seconds=self.active_config['max_age']))):
+                or (cache_date is not None and cache_date < (datetime.now(tz=timezone.utc) - timedelta(seconds=self.active_config['max_age']))):
             try:
                 status_response: requests.Response = session.get(url, allow_redirects=False)
                 self._record_elapsed(status_response.elapsed)
                 if status_response.status_code in (requests.codes['ok'], requests.codes['multiple_status']):
                     data = status_response.json()
                     if session.cache is not None:
-                        session.cache[url] = (data, str(datetime.utcnow()))
+                        session.cache[url] = (data, str(datetime.now(tz=timezone.utc)))
                 elif status_response.status_code == requests.codes['no_content'] and allow_empty:
                     data = None
                 elif status_response.status_code == requests.codes['too_many_requests']:
@@ -1481,7 +1481,7 @@ class Connector(BaseConnector):
                     if status_response.status_code in (requests.codes['ok'], requests.codes['multiple_status']):
                         data = status_response.json()
                         if session.cache is not None:
-                            session.cache[url] = (data, str(datetime.utcnow()))
+                            session.cache[url] = (data, str(datetime.now(tz=timezone.utc)))
                     elif not allow_http_error or (allowed_errors is not None and status_response.status_code not in allowed_errors):
                         raise RetrievalError(f'Could not fetch data even after re-authorization. Status Code was: {status_response.status_code}')
                 elif not allow_http_error or (allowed_errors is not None and status_response.status_code not in allowed_errors):
