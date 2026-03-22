@@ -1333,7 +1333,7 @@ class Connector(BaseConnector):
                     if img is None or self.active_config['max_age_static'] is None \
                             or (cache_date is not None and cache_date < (datetime.now(tz=timezone.utc) - timedelta(seconds=self.active_config['max_age_static']))):
                         try:
-                            image_download_response = requests.get(image_url, stream=True, timeout=10)
+                            image_download_response = self.session.get(image_url, stream=True)
                             if image_download_response.status_code == requests.codes['ok']:
                                 img = Image.open(image_download_response.raw)  # pyright: ignore[reportPossiblyUnboundVariable]
                                 if self.session.cache is not None:
