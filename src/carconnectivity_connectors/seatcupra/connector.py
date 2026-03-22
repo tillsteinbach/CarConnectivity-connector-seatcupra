@@ -1735,8 +1735,8 @@ class Connector(BaseConnector):
                 raise CommandError(f'Timeout during read: {timeout_error}') from timeout_error
             except requests.exceptions.RetryError as retry_error:
                 raise CommandError(f'Retrying failed: {retry_error}') from retry_error
-            else:
-                raise CommandError(f'Unknown command {command_arguments["command"]}')
+        else:
+            raise CommandError(f'Unknown command {command_arguments["command"]}')
         return command_arguments
 
     def __on_lock_unlock(self, lock_unlock_command: LockUnlockCommand, command_arguments: Union[str, Dict[str, Any]]) \
