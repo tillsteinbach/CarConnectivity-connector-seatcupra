@@ -656,7 +656,7 @@ class Connector(BaseConnector):
             for window_id in vehicle.windows.windows.keys() - seen_window_ids:
                 vehicle.windows.windows[window_id].enabled = False
             log_extra_keys(LOG_API, f'/api/v2/vehicle-status/{vin}', vehicle_status_data, {'updatedAt', 'locked', 'lights', 'hood', 'trunk', 'doors',
-                                                                                           'windows', 'sunRoof'})
+                                                                                           'windows', 'sunRoof', 'engine'})
         return vehicle
 
     def fetch_vehicle_mycar_status(self, vehicle: SeatCupraVehicle, no_cache: bool = False) -> SeatCupraVehicle:
