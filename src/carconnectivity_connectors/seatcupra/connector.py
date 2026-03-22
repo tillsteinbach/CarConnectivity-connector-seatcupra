@@ -494,8 +494,6 @@ class Connector(BaseConnector):
                                         lock_unlock_command._add_on_set_hook(self.__on_lock_unlock)  # pylint: disable=protected-access
                                         lock_unlock_command.enabled = True
                                         vehicle.doors.commands.add_command(lock_unlock_command)
-                                    else:
-                                        vehicle.capabilities.clear_capabilities()
                         if isinstance(vehicle, SeatCupraVehicle):
                             vehicle = self.fetch_image(vehicle)
                     else:
