@@ -994,8 +994,10 @@ class Connector(BaseConnector):
                 vehicle.maintenance.oil_service_due_after._set_value(None)  # pylint: disable=protected-access
             log_extra_keys(LOG_API, f'/v1/vehicles/{vin}/maintenance', data,  {'inspectionDueDays', 'inspectionDueKm', 'oilServiceDueDays', 'oilServiceDueKm'})
         else:
-            vehicle.odometer._set_value(None)  # pylint: disable=protected-access
-            vehicle.odometer.precision = 1
+            vehicle.maintenance.inspection_due_at._set_value(None)  # pylint: disable=protected-access
+            vehicle.maintenance.inspection_due_after._set_value(None)  # pylint: disable=protected-access
+            vehicle.maintenance.oil_service_due_at._set_value(None)  # pylint: disable=protected-access
+            vehicle.maintenance.oil_service_due_after._set_value(None)  # pylint: disable=protected-access
         return vehicle
 
     def fetch_climatisation(self, vehicle: SeatCupraVehicle, no_cache: bool = False) -> SeatCupraVehicle:
