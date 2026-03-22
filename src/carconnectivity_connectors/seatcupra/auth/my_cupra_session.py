@@ -288,7 +288,7 @@ class MyCupraSession(VWWebSession):
         if token_response.status_code == requests.codes['unauthorized']:
             raise AuthenticationError('Refreshing tokens failed: Server requests new authorization')
         elif token_response.status_code in (requests.codes['internal_server_error'], requests.codes['service_unavailable'], requests.codes['gateway_timeout']):
-            raise TemporaryAuthenticationError('Token could not be refreshed due to temporary MyCupra failure: {tokenResponse.status_code}')
+            raise TemporaryAuthenticationError(f'Token could not be refreshed due to temporary MyCupra failure: {token_response.status_code}')
         elif token_response.status_code == requests.codes['ok']:
             # parse new tokens from response
             self.parse_from_body(token_response.text)
