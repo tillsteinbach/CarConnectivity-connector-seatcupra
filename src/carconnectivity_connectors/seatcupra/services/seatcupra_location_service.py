@@ -16,7 +16,7 @@ if TYPE_CHECKING:
     import logging
 
     from carconnectivity.carconnectivity import CarConnectivity
-    from carconnectivity_connectors.skoda.connector import Connector
+    from carconnectivity_connectors.seatcupra.connector import Connector
 
 
 class SeatCupraLocationService(LocationService):  # pylint: disable=too-few-public-methods, too-many-instance-attributes
@@ -121,11 +121,11 @@ class SeatCupraLocationService(LocationService):  # pylint: disable=too-few-publ
                                     charging_station.operator_id._set_value(detail_data['provider']['operator'])  # pylint: disable=protected-access
                                     charging_station.operator_name._set_value(detail_data['provider']['operator'])  # pylint: disable=protected-access
                         except requests.exceptions.JSONDecodeError as json_error:
-                            self.log.error(f"Error decoding JSON response from Skoda API for charging station details: {json_error}")
+                            self.log.error(f"Error decoding JSON response from Seat/Cupra API for charging station details: {json_error}")
                         return charging_station
         except requests.exceptions.ConnectionError as connection_error:
             self.log.error(f'Connection error: {connection_error}.'
-                           ' If this happens frequently, please check if other applications communicate with the Skoda server.')
+                           ' If this happens frequently, please check if other applications communicate with the Seat/Cupra server.')
         except requests.exceptions.ChunkedEncodingError as chunked_encoding_error:
             self.log.error(f'Error: {chunked_encoding_error}')
         except requests.exceptions.ReadTimeout as timeout_error:
@@ -133,6 +133,6 @@ class SeatCupraLocationService(LocationService):  # pylint: disable=too-few-publ
         except requests.exceptions.RetryError as retry_error:
             self.log.error(f'Retrying failed: {retry_error}')
         except requests.exceptions.JSONDecodeError as json_error:
-            self.log.error(f"Error decoding JSON response from Skoda API: {json_error}")
+            self.log.error(f"Error decoding JSON response from Seat/Cupra API: {json_error}")
             return None
         return None
