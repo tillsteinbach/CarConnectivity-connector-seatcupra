@@ -31,7 +31,7 @@ class SeatCupraClimatization(Climatization):  # pylint: disable=too-many-instanc
 
     class Settings(Climatization.Settings):
         """
-        This class represents the settings for a skoda car climatiation.
+        This class represents the settings for a Seat/Cupra car climatization.
         """
         def __init__(self, parent: Optional[GenericObject] = None, origin: Optional[Climatization.Settings] = None,
                      initialization: Optional[Dict] = None) -> None:

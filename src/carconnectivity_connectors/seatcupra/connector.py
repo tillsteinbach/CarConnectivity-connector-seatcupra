@@ -122,7 +122,7 @@ class Connector(BaseConnector):
                     except ValueError as err:
                         LOG.error('Could not parse spin from netrc: %s', err)
             except netrc.NetrcParseError as err:
-                LOG.error('Authentification using %s failed: %s', self.active_config['netrc'], err)
+                LOG.error('Authentication using %s failed: %s', self.active_config['netrc'], err)
                 raise AuthenticationError(f'Authentication using {self.active_config["netrc"]} failed: {err}') from err
             except TypeError as err:
                 if 'username' not in config:
@@ -136,7 +136,7 @@ class Connector(BaseConnector):
         if 'interval' in config:
             self.active_config['interval'] = config['interval']
             if self.active_config['interval'] < 180:
-                raise ValueError('Intervall must be at least 180 seconds')
+                raise ValueError('Interval must be at least 180 seconds')
         self.active_config['max_age'] = self.active_config['interval'] - 1
         if 'max_age' in config:
             self.active_config['max_age'] = config['max_age']
@@ -1002,17 +1002,16 @@ class Connector(BaseConnector):
 
     def fetch_climatisation(self, vehicle: SeatCupraVehicle, no_cache: bool = False) -> SeatCupraVehicle:
         """
-        Fetches the mileage of the given vehicle and updates its mileage attributes.
+        Fetches the climatisation status of the given vehicle and updates its climatisation attributes.
 
         Args:
-            vehicle (Seat/CupraVehicle): The vehicle object containing the VIN and mileage attributes.
+            vehicle (Seat/CupraVehicle): The vehicle object containing the VIN and climatisation attributes.
 
         Returns:
-            Seat/CupraVehicle: The updated vehicle object with the fetched mileage data.
+            Seat/CupraVehicle: The updated vehicle object with the fetched climatisation data.
 
         Raises:
             APIError: If the VIN is missing.
-            ValueError: If the vehicle has no position object.
         """
         vin = vehicle.vin.value
         if vin is None:
@@ -1145,17 +1144,16 @@ class Connector(BaseConnector):
 
     def fetch_charging(self, vehicle: SeatCupraVehicle, no_cache: bool = False) -> SeatCupraVehicle:
         """
-        Fetches the mileage of the given vehicle and updates its mileage attributes.
+        Fetches the charging status of the given vehicle and updates its charging attributes.
 
         Args:
-            vehicle (Seat/CupraVehicle): The vehicle object containing the VIN and mileage attributes.
+            vehicle (Seat/CupraVehicle): The vehicle object containing the VIN and charging attributes.
 
         Returns:
-            Seat/CupraVehicle: The updated vehicle object with the fetched mileage data.
+            Seat/CupraVehicle: The updated vehicle object with the fetched charging data.
 
         Raises:
             APIError: If the VIN is missing.
-            ValueError: If the vehicle has no position object.
         """
         vin = vehicle.vin.value
         if vin is None:
@@ -1569,7 +1567,7 @@ class Connector(BaseConnector):
                 if vehicle.climatization.settings.target_temperature.unit == Temperature.C:
                     command_dict['targetTemperatureUnit'] = 'celsius'
                 elif vehicle.climatization.settings.target_temperature.unit == Temperature.F:
-                    command_dict['targetTemperatureUnit'] = 'farenheit'
+                    command_dict['targetTemperatureUnit'] = 'fahrenheit'
                 else:
                     command_dict['targetTemperatureUnit'] = 'celsius'
                 if temperature_value is not None:
@@ -1578,7 +1576,7 @@ class Connector(BaseConnector):
                 if command_arguments['target_temperature_unit'] == Temperature.C:
                     command_dict['targetTemperatureUnit'] = 'celsius'
                 elif command_arguments['target_temperature_unit'] == Temperature.F:
-                    command_dict['targetTemperatureUnit'] = 'farenheit'
+                    command_dict['targetTemperatureUnit'] = 'fahrenheit'
                 else:
                     command_dict['targetTemperatureUnit'] = 'celsius'
         elif command_arguments['command'] == ClimatizationStartStopCommand.Command.STOP:
@@ -1812,7 +1810,7 @@ class Connector(BaseConnector):
             if settings.target_temperature.unit == Temperature.C:
                 setting_dict['targetTemperatureUnit'] = 'celsius'
             elif settings.target_temperature.unit == Temperature.F:
-                setting_dict['targetTemperatureUnit'] = 'farenheit'
+                setting_dict['targetTemperatureUnit'] = 'fahrenheit'
             else:
                 setting_dict['targetTemperatureUnit'] = 'celsius'
         climatization_capability: Optional[Capability] = vehicle.capabilities.get_capability('climatisation')
