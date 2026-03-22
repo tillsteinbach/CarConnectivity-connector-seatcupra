@@ -1626,13 +1626,11 @@ class Connector(BaseConnector):
         if 'command' not in command_arguments:
             raise CommandError('Command argument missing')
         command_dict = {}
-        if self.active_config['spin'] is None:
+        if self.active_config['spin'] is None or self.active_config['spin'] == '':
             raise CommandError('S-PIN is missing, please add S-PIN to your configuration or .netrc file')
         if 'spin' in command_arguments:
             command_dict['spin'] = command_arguments['spin']
         else:
-            if self.active_config['spin'] is None or self.active_config['spin'] == '':
-                raise CommandError('S-PIN is missing, please add S-PIN to your configuration or .netrc file')
             command_dict['spin'] = self.active_config['spin']
         if command_arguments['command'] == SpinCommand.Command.VERIFY:
             url = f'https://ola.prod.code.seat.cloud.vwgroup.com/v2/users/{self.session.user_id}/spin/verify'
