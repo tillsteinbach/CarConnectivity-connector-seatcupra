@@ -193,7 +193,7 @@ class Connector(BaseConnector):
         fetch: bool = True
         self.connection_state._set_value(value=ConnectionState.CONNECTING)  # pylint: disable=protected-access
         while not self._stop_event.is_set():
-            interval = 300
+            interval: float = 300
             try:
                 try:
                     if fetch:
@@ -203,10 +203,10 @@ class Connector(BaseConnector):
                         self.update_vehicles()
                     self.last_update._set_value(value=datetime.now(tz=timezone.utc))  # pylint: disable=protected-access
                     if self.interval.value is not None:
-                        interval: float = self.interval.value.total_seconds()
+                        interval = self.interval.value.total_seconds()
                 except Exception:
                     if self.interval.value is not None:
-                        interval: float = self.interval.value.total_seconds()
+                        interval = self.interval.value.total_seconds()
                     raise
             except TooManyRequestsError as err:
                 LOG.error('Retrieval error during update. Too many requests from your account (%s). Will try again after 15 minutes', str(err))
