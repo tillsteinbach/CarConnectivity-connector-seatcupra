@@ -581,8 +581,12 @@ class Connector(BaseConnector):
                     vehicle.is_active._set_value(None, measured=captured_at)  # pylint: disable=protected-access
 
             if 'hood' in vehicle_status_data and vehicle_status_data['hood'] is not None:
+                if 'doors' not in vehicle_status_data or vehicle_status_data['doors'] is None:
+                    vehicle_status_data['doors'] = {}
                 vehicle_status_data['doors']['hood'] = vehicle_status_data['hood']
             if 'trunk' in vehicle_status_data and vehicle_status_data['trunk'] is not None:
+                if 'doors' not in vehicle_status_data or vehicle_status_data['doors'] is None:
+                    vehicle_status_data['doors'] = {}
                 vehicle_status_data['doors']['trunk'] = vehicle_status_data['trunk']
 
             if 'doors' in vehicle_status_data and vehicle_status_data['doors'] is not None:
