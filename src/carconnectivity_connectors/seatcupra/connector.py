@@ -267,9 +267,9 @@ class Connector(BaseConnector):
                 self.car_connectivity.garage.remove_vehicle(vehicle.id)
                 vehicle.enabled = False
         self._stop_event.set()
-        self.session.close()
         if self._background_thread is not None:
             self._background_thread.join()
+        self.session.close()
         self.persist()
         BaseConnector.shutdown(self)
 
