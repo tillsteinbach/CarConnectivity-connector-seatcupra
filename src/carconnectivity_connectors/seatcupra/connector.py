@@ -1230,7 +1230,7 @@ class Connector(BaseConnector):
                         if isinstance(vehicle.charging.settings, SeatCupraCharging.Settings):
                             vehicle.charging.settings.max_current_in_ampere = True
                         else:
-                            raise ValueError('Charging settings not of type VolkswagenCharging.Settings')
+                            raise ValueError('Charging settings not of type SeatCupraCharging.Settings')
                         vehicle.charging.settings.maximum_current.minimum = 6.0
                         vehicle.charging.settings.maximum_current.maximum = 16.0
                         vehicle.charging.settings.maximum_current.precision = 1.0
@@ -1243,7 +1243,7 @@ class Connector(BaseConnector):
                         if isinstance(vehicle.charging.settings, SeatCupraCharging.Settings):
                             vehicle.charging.settings.max_current_in_ampere = False
                         else:
-                            raise ValueError('Charging settings not of type VolkswagenCharging.Settings')
+                            raise ValueError('Charging settings not of type SeatCupraCharging.Settings')
                         vehicle.charging.settings.maximum_current.minimum = 6.0
                         vehicle.charging.settings.maximum_current.maximum = 16.0
                         vehicle.charging.settings.maximum_current.precision = 1.0
@@ -1933,7 +1933,7 @@ class Connector(BaseConnector):
                 raise SetterError(f'Could not set value ({settings_response.status_code})')
         except requests.exceptions.ConnectionError as connection_error:
             raise SetterError(f'Connection error: {connection_error}.'
-                              ' If this happens frequently, please check if other applications communicate with the Volkswagen server.') from connection_error
+                              ' If this happens frequently, please check if other applications communicate with the Seat/Cupra server.') from connection_error
         except requests.exceptions.ChunkedEncodingError as chunked_encoding_error:
             raise SetterError(f'Error: {chunked_encoding_error}') from chunked_encoding_error
         except requests.exceptions.ReadTimeout as timeout_error:
