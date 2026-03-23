@@ -228,11 +228,11 @@ class Connector(BaseConnector):
                 LOG.error('Temporary authentification error during update (%s). Will try again after configured interval of %ss', str(err), interval)
                 self.connection_state._set_value(value=ConnectionState.ERROR)  # pylint: disable=protected-access
                 self._stop_event.wait(interval)
-            except Exception as err:
+            except Exception:
                 LOG.critical('Critical error during update: %s', traceback.format_exc())
                 self.connection_state._set_value(value=ConnectionState.ERROR)  # pylint: disable=protected-access
                 self.healthy._set_value(value=False)  # pylint: disable=protected-access
-                raise err
+                raise
             else:
                 self.connection_state._set_value(value=ConnectionState.CONNECTED)  # pylint: disable=protected-access
                 self._stop_event.wait(interval)
