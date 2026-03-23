@@ -1347,7 +1347,7 @@ class Connector(BaseConnector):
                                     self.session.refresh()
                                     LOG.debug('Token refresh successful, retrying request')
                                 except Exception as refresh_error:
-                                    LOG.info(f'Token refresh failed ({refresh_error}), attempting full login')
+                                    LOG.info('Token refresh failed (%s), attempting full login', refresh_error)
                                     self.session.login_with_retry()
                                 image_download_response = self.session.get(image_url, stream=True)
                                 if image_download_response.status_code == requests.codes['ok']:
@@ -1470,7 +1470,7 @@ class Connector(BaseConnector):
                         session.refresh()
                         LOG.debug('Token refresh successful, retrying request')
                     except Exception as refresh_error:
-                        LOG.info(f'Token refresh failed ({refresh_error}), attempting full login')
+                        LOG.info('Token refresh failed (%s), attempting full login', refresh_error)
                         session.login_with_retry()
                     status_response = session.get(url, allow_redirects=False)
 
