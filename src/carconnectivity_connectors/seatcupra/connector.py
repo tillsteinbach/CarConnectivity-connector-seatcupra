@@ -1739,7 +1739,7 @@ class Connector(BaseConnector):
                 or lock_unlock_command.parent.parent.parent is None or not isinstance(lock_unlock_command.parent.parent.parent, GenericVehicle):
             raise CommandError('Object hierarchy is not as expected')
         if not isinstance(command_arguments, dict):
-            raise SetterError('Command arguments are not a dictionary')
+            raise CommandError('Command arguments are not a dictionary')
         vehicle: GenericVehicle = lock_unlock_command.parent.parent.parent
         vin: Optional[str] = vehicle.vin.value
         if vin is None:
