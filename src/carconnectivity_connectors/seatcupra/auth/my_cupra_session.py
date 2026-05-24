@@ -67,7 +67,11 @@ class MyCupraSession(VWWebSession):
                 'content-type': 'application/json',
                 'user-agent': 'CUPRAApp%20-%20Store/20220503 CFNetwork/1333.0.4 Darwin/21.5.0',
                 'accept-language': 'de-de',
-                'accept-encoding': 'gzip, deflate, br'
+                'accept-encoding': 'gzip, deflate, br',
+                'app-market': 'android',
+                'app-brand': 'cupra',
+                'app-version': '2.15.0',
+                'origin': 'app'
             })
 
     def login(self):
