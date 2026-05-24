@@ -50,7 +50,11 @@ class MyCupraSession(VWWebSession):
                 'content-type': 'application/json',
                 'user-agent': 'SEATApp/2.5.0 (com.seat.myseat.ola; build:202410171614; iOS 15.8.3) Alamofire/5.7.0 Mobile',
                 'accept-language': 'de-de',
-                'accept-encoding': 'gzip, deflate, br'
+                'accept-encoding': 'gzip, deflate, br',
+                'app-market': 'android',
+                'app-brand': 'seat',
+                'app-version': '2.17.0',
+                'origin': 'app'
             })
         else:
             super(MyCupraSession, self).__init__(client_id='3c756d46-f1ba-4d78-9f9a-cff0d5292d51@apps_vw-dilab_com',
