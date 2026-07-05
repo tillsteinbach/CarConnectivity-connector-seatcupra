@@ -10,6 +10,13 @@ from carconnectivity_services.base.service import ServiceType
 from carconnectivity_services.location.location_service import LocationService
 from carconnectivity.charging_station import ChargingStation
 
+STATUS_REQUEST_HEADERS = {
+    'app-market': 'android',
+    'app-brand': 'cupra',
+    'app-version': '2.15.0',
+    'origin': 'app'
+}
+
 if TYPE_CHECKING:
     from typing import Optional
 
@@ -52,7 +59,8 @@ class SeatCupraLocationService(LocationService):  # pylint: disable=too-few-publ
             "center": {"latitude": latitude, "longitude": longitude},
             "radius": radius,
         }
-        status_response: requests.Response = self.connector.session.post(url, allow_redirects=False, data=json.dumps(data))
+        status_response: requests.Response = self.connector.session.post(url, allow_redirects=False, data=json.dumps(data),
+                                                                          headers=STATUS_REQUEST_HEADERS)
         try:
             data = status_response.json()
             if data is not None and 'points' in data:

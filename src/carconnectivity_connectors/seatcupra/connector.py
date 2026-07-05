@@ -68,6 +68,13 @@ if TYPE_CHECKING:
 LOG: logging.Logger = logging.getLogger("carconnectivity.connectors.seatcupra")
 LOG_API: logging.Logger = logging.getLogger("carconnectivity.connectors.seatcupra-api-debug")
 
+STATUS_REQUEST_HEADERS = {
+    'app-market': 'android',
+    'app-brand': 'cupra',
+    'app-version': '2.15.0',
+    'origin': 'app'
+}
+
 
 # pylint: disable=too-many-lines
 class Connector(BaseConnector):
@@ -1442,7 +1449,7 @@ class Connector(BaseConnector):
         if data is None or self.active_config['max_age'] is None \
                 or (cache_date is not None and cache_date < (datetime.now(tz=timezone.utc) - timedelta(seconds=self.active_config['max_age']))):
             try:
-                status_response: requests.Response = session.get(url, allow_redirects=False)
+                status_response: requests.Response = session.get(url, allow_redirects=False, headers=STATUS_REQUEST_HEADERS)
                 self._record_elapsed(status_response.elapsed)
                 if status_response.status_code in (requests.codes['ok'], requests.codes['multiple_status']):
                     data = status_response.json()
@@ -1461,7 +1468,7 @@ class Connector(BaseConnector):
                     except Exception as refresh_error:
                         LOG.info('Token refresh failed (%s), attempting full login', refresh_error)
                         session.login_with_retry()
-                    status_response = session.get(url, allow_redirects=False)
+                    status_response = session.get(url, allow_redirects=False, headers=STATUS_REQUEST_HEADERS)
 
                     if status_response.status_code in (requests.codes['ok'], requests.codes['multiple_status']):
                         data = status_response.json()
@@ -1503,10 +1510,10 @@ class Connector(BaseConnector):
         try:
             if command_arguments['command'] == ChargingStartStopCommand.Command.START:
                 url = f'https://ola.prod.code.seat.cloud.vwgroup.com/vehicles/{vin}/charging/requests/start'
-                command_response: requests.Response = self.session.post(url, allow_redirects=True)
+                command_response: requests.Response = self.session.post(url, allow_redirects=True, headers=STATUS_REQUEST_HEADERS)
             elif command_arguments['command'] == ChargingStartStopCommand.Command.STOP:
                 url = f'https://ola.prod.code.seat.cloud.vwgroup.com/vehicles/{vin}/charging/requests/stop'
-                command_response: requests.Response = self.session.post(url, allow_redirects=True)
+                command_response: requests.Response = self.session.post(url, allow_redirects=True, headers=STATUS_REQUEST_HEADERS)
             else:
                 raise CommandError(f'Unknown command {command_arguments["command"]}')
 
@@ -1571,7 +1578,7 @@ class Connector(BaseConnector):
         else:
             raise CommandError(f'Unknown command {command_arguments["command"]}')
         try:
-            command_response: requests.Response = self.session.post(url, data=json.dumps(command_dict), allow_redirects=True)
+            command_response: requests.Response = self.session.post(url, data=json.dumps(command_dict), allow_redirects=True, headers=STATUS_REQUEST_HEADERS)
             if command_response.status_code not in [requests.codes['ok'], requests.codes['created']]:
                 LOG.error('Could not start/stop air conditioning (%s: %s)', command_response.status_code, command_response.text)
                 raise CommandError(f'Could not start/stop air conditioning ({command_response.status_code}: {command_response.text})')
@@ -1595,7 +1602,7 @@ class Connector(BaseConnector):
         """
         command_dict = {'spin': spin}
         url = f'https://ola.prod.code.seat.cloud.vwgroup.com/v2/users/{self.session.user_id}/spin/verify'
-        spin_verify_response: requests.Response = self.session.post(url, data=json.dumps(command_dict), allow_redirects=True)
+        spin_verify_response: requests.Response = self.session.post(url, data=json.dumps(command_dict), allow_redirects=True, headers=STATUS_REQUEST_HEADERS)
         if spin_verify_response.status_code != requests.codes['created']:
             raise AuthenticationError(f'Could not fetch security token ({spin_verify_response.status_code}: {spin_verify_response.text})')
         data = spin_verify_response.json()
@@ -1622,7 +1629,7 @@ class Connector(BaseConnector):
         else:
             raise CommandError(f'Unknown command {command_arguments["command"]}')
         try:
-            command_response: requests.Response = self.session.post(url, data=json.dumps(command_dict), allow_redirects=True)
+            command_response: requests.Response = self.session.post(url, data=json.dumps(command_dict), allow_redirects=True, headers=STATUS_REQUEST_HEADERS)
             if command_response.status_code != requests.codes['created']:
                 LOG.error('Could not execute spin command (%s: %s)', command_response.status_code, command_response.text)
                 raise CommandError(f'Could not execute spin command ({command_response.status_code}: {command_response.text})')
@@ -1656,7 +1663,7 @@ class Connector(BaseConnector):
             url = f'https://ola.prod.code.seat.cloud.vwgroup.com/v1/vehicles/{vin}/vehicle-wakeup/request'
 
             try:
-                command_response: requests.Response = self.session.post(url, data='{}', allow_redirects=True)
+                command_response: requests.Response = self.session.post(url, data='{}', allow_redirects=True, headers=STATUS_REQUEST_HEADERS)
                 if command_response.status_code not in (requests.codes['ok'], requests.codes['no_content'], requests.codes['created']):
                     LOG.error('Could not execute wake command (%s: %s)', command_response.status_code, command_response.text)
                     raise CommandError(f'Could not execute wake command ({command_response.status_code}: {command_response.text})')
@@ -1705,7 +1712,7 @@ class Connector(BaseConnector):
 
             url = f'https://ola.prod.code.seat.cloud.vwgroup.com/v1/vehicles/{vin}/honk-and-flash'
             try:
-                command_response: requests.Response = self.session.post(url, data=json.dumps(command_dict), allow_redirects=True)
+                command_response: requests.Response = self.session.post(url, data=json.dumps(command_dict), allow_redirects=True, headers=STATUS_REQUEST_HEADERS)
                 if command_response.status_code not in (requests.codes['ok'], requests.codes['no_content'], requests.codes['created']):
                     LOG.error('Could not execute honk or flash command (%s: %s)', command_response.status_code, command_response.text)
                     raise CommandError(f'Could not execute honk or flash command ({command_response.status_code}: {command_response.text})')
@@ -1751,6 +1758,7 @@ class Connector(BaseConnector):
             raise CommandError(f'Unknown command {command_arguments["command"]}')
         try:
             headers = self.session.headers.copy()
+            headers.update(STATUS_REQUEST_HEADERS)
             headers['SecToken'] = sec_token
             command_response: requests.Response = self.session.post(url, data=json.dumps(command_dict), allow_redirects=True, headers=headers)
             if command_response.status_code != requests.codes['ok']:
@@ -1808,7 +1816,7 @@ class Connector(BaseConnector):
 
         url: str = f'https://ola.prod.code.seat.cloud.vwgroup.com/v2/vehicles/{vin}/climatisation/settings'
         try:
-            settings_response: requests.Response = self.session.post(url, data=json.dumps(setting_dict), allow_redirects=True)
+            settings_response: requests.Response = self.session.post(url, data=json.dumps(setting_dict), allow_redirects=True, headers=STATUS_REQUEST_HEADERS)
             if settings_response.status_code not in [requests.codes['ok'], requests.codes['created']]:
                 LOG.error('Could not set climatization settings (%s) %s', settings_response.status_code, settings_response.text)
                 raise SetterError(f'Could not set value ({settings_response.status_code}): {settings_response.text}')
@@ -1839,10 +1847,10 @@ class Connector(BaseConnector):
         try:
             if command_arguments['command'] == WindowHeatingStartStopCommand.Command.START:
                 url = f'https://ola.prod.code.seat.cloud.vwgroup.com/vehicles/{vin}/windowheating/requests/start'
-                command_response: requests.Response = self.session.post(url, allow_redirects=True)
+                command_response: requests.Response = self.session.post(url, allow_redirects=True, headers=STATUS_REQUEST_HEADERS)
             elif command_arguments['command'] == WindowHeatingStartStopCommand.Command.STOP:
                 url = f'https://ola.prod.code.seat.cloud.vwgroup.com/vehicles/{vin}/windowheating/requests/stop'
-                command_response: requests.Response = self.session.post(url, allow_redirects=True)
+                command_response: requests.Response = self.session.post(url, allow_redirects=True, headers=STATUS_REQUEST_HEADERS)
             else:
                 raise CommandError(f'Unknown command {command_arguments["command"]}')
 
@@ -1916,7 +1924,7 @@ class Connector(BaseConnector):
 
         url: str = f'https://ola.prod.code.seat.cloud.vwgroup.com/v1/vehicles/{vin}/charging/settings'
         try:
-            settings_response: requests.Response = self.session.post(url, data=json.dumps(setting_dict), allow_redirects=True)
+            settings_response: requests.Response = self.session.post(url, data=json.dumps(setting_dict), allow_redirects=True, headers=STATUS_REQUEST_HEADERS)
             if settings_response.status_code not in [requests.codes['ok'], requests.codes['created']]:
                 LOG.error('Could not set charging settings (%s)', settings_response.status_code)
                 raise SetterError(f'Could not set value ({settings_response.status_code})')
